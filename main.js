@@ -27,11 +27,12 @@ const DIFFS = {
             note:'힌트·뱃지·수치를 모두 가린 진짜 딜레마. 모든 보기가 장점과 숨은 대가를 가집니다.' },
   B:      { key:'B',      label:'하드코어',  emoji:'☠️', hideHints:true, suddenTemp:3.00, topCut:0.90, surviveCut:0.60, collapse:true,  budget:false,
             note:'전 시나리오 딜레마 + 기온 3.0°C·생태계 0% 도달 시 즉시 붕괴(F) + 등급 컷오프 최상.' },
+  /* 「예산」 고유: 남긴 예산에 매 턴 복리 이자 → 저축·투자 타이밍 싸움 */
   BUDGET: { key:'BUDGET', label:'예산',     emoji:'💰', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true,
-            note:'정해진 예산 안에서만 정책을 집행. 선택지마다 비용이 달라, 비싼 친환경안을 모두 살 수는 없습니다.' },
-  /* 「정치」: 예산 머신을 재사용하되 자원을 「정치자본」으로 테마링. 친환경·고강도 정책일수록 정치자본을 크게 소모 */
+            note:'💰 남긴 예산엔 매 턴 이자(복리 8%)가 붙습니다. 초반엔 아끼고 후반 메가프로젝트에 몰빵 — 자금 운용의 타이밍이 승부.' },
+  /* 「정치」 고유: 지지율(여론) 2차 자원 + 임기 심사. 자본 테마링 위에 여론 줄타기 추가 */
   POLITICS:{ key:'POLITICS', label:'정치', emoji:'🗳️', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true, politics:true,
-            note:'정치자본으로 정책을 집행. 옳은 줄 알아도, 자본이 없으면 강한 친환경안을 끝까지 밀어붙일 수 없습니다.' },
+            note:'🗳️ 강한 친환경 규제는 지지율을 깎고, 인기영합은 지지율을 올립니다. 지지율이 높을수록 정치자본이 더 충원되고, 3·6·9단계 임기 심사에서 35% 미만이면 불신임으로 삭감됩니다.' },
 };
 let currentDiff = 'A';   // 기본을 「도전」으로 → 정답이 안 보이는 진짜 딜레마부터 시작
 let dailyMode = false;   // 🗓️ 오늘의 지구: 날짜 시드로 모두가 같은 판(친구와 점수 비교)
@@ -54,15 +55,15 @@ function toggleDaily(){ dailyMode = !dailyMode; screenIntro(); }
    점수(친환경도) + 단계(tier) + 적극적 기온 감축폭을 비용으로 환산. */
 function costOf(choice, tier){
   const s = choice.fx.score;
-  // 순비용(net) — 양수=지출, 음수=「자금 확보」(환급).
-  //   친환경(20)일수록 큰 지출 / 환경을 포기하는 하(6점) 선택일수록 오히려 자원을 돌려받습니다.
-  //   → 예산이 바닥나면 "이번 턴은 눈 딱 감고 환경 포기, 자금 확보" 같은 전략적 타협이 가능.
-  let c;
-  if(s>=20)      c = 170 + (tier-1)*35 + Math.round(Math.max(0,-choice.fx.temp)*55); // 최선: 자본집약
-  else if(s>=10) c = 95  + (tier-1)*20;                                              // 절충(중): 중간 지출
-  else if(s>=8)  c = 30  - (tier-1)*4;                                               // 신규 절충: 소폭 지출
-  else           c = -(28 + (tier-1)*8);                                             // 환경 포기(하·6점): 자금 확보
-  return c;
+  // 순비용(net) — 양수=지출, 음수=「자본 확보」(환급).
+  //   4지선다를 정확히 2:2로 나눕니다 → 상위 2개(상·중)는 자원을 소비, 하위 2개(균형형·하)는 자원을 돌려받음.
+  //   "이번 턴은 친환경에 투자할까, 아니면 환경을 내주고 곳간을 채울까"의 매 턴 저울질.
+  //   ★ 수치적 비대칭: 나가는 자원(소비)이 들어오는 자원(환급)의 약 2.8배.
+  //     → 환급 보기를 여러 번 골라야 소비 보기 한 번을 지를 수 있는 압박이 생깁니다.
+  if(s>=20) return  150 + (tier-1)*30 + Math.round(Math.max(0,-choice.fx.temp)*45); // 상(최선): 대규모 소비
+  if(s>=10) return  85  + (tier-1)*18;                                              // 중(절충): 소비
+  if(s>=8)  return -(30 + (tier-1)*5);                                              // 균형형: 소폭 자본 확보
+  return     -(55 + (tier-1)*9);                                                    // 하(환경 포기): 큰 자본 확보
 }
 function diffCfg(){ return DIFFS[currentDiff] || DIFFS.NORMAL; }
 function selectDiff(key){ if(DIFFS[key]){ currentDiff = key; screenIntro(); } }
@@ -395,8 +396,8 @@ function choose(choiceIdx){
     const cheapest = costs.indexOf(Math.min(...costs));
     const cost = costs[choiceIdx];
     if(cost > G.budget && choiceIdx !== cheapest) return;   // 못 사는 보기는 무시
-    // 음수 비용(환경 포기) = 자금 확보 → 예산이 다시 차오름(상한=총예산)
-    G.budget = clamp(G.budget - cost, 0, G.budgetTotal || G.budget - cost);
+    // 음수 비용(환경 포기)=자금 확보 → 예산 무제한 축적(오버차지). 상한 없음.
+    G.budget = Math.max(0, G.budget - cost);
   }
 
   locking = true;
@@ -428,14 +429,27 @@ function choose(choiceIdx){
     }
   }
 
-  // 4) 티핑포인트 결합 + 지표 반영
-  const tempDelta = (fx.temp>0 ? fx.temp*ecoTempPenalty() : fx.temp) * stepWeight * modWeight;
+  // 4) 티핑포인트 결합 + 후반 「그리디 폭주」 + 지표 반영
+  //    자원 모드에서 돈/표를 벌려고 환경 포기(하·6점) 보기를 고르면, 후반일수록 기온·생태 타격이 매섭게 가속됩니다.
+  let greedyLate = 1;
+  if(diffCfg().budget && c.fx.score<=6) greedyLate = 1 + G.currentStep*0.10;   // 1단계 ×1.0 → 9단계 ×1.9
+  const tempDelta = (fx.temp>0 ? fx.temp*ecoTempPenalty()*greedyLate : fx.temp) * stepWeight * modWeight;
   let nextTemp = G.stats.temp + tempDelta;
   if(nextTemp < 0.80) nextTemp = 0.80;
   G.stats.temp = nextTemp;
   G.stats.sea  = G.stats.sea + (fx.sea * stepWeight);
-  G.stats.eco  = clamp(G.stats.eco + (fx.eco * stepWeight * modWeight), 0, 100);
+  const ecoDelta = (fx.eco<0 ? fx.eco*greedyLate : fx.eco) * stepWeight * modWeight;
+  G.stats.eco  = clamp(G.stats.eco + ecoDelta, 0, 100);
   G.stats.score += c.fx.score;
+  // [정치] 선택이 지지율(여론)을 흔든다 — 상한 200%까지 오버차지 허용
+  if(diffCfg().politics){
+    let dApp = approvalDelta(c);
+    // 콘크리트 지지층(오버차지 시너지): 지지율 100% 초과 구간에선 소비형 규제의 지지율 페널티 절반
+    if(dApp < 0 && (G.approval||60) > 100) dApp = Math.round(dApp * 0.5);
+    // 8점 균형안 인공호흡기: 정치 모드에서 균형형은 폭넓은 지지로 지지율 수급 보너스(+4)
+    if(c.fx.score>=8 && c.fx.score<10) dApp = 4;
+    G.approval = clamp((typeof G.approval==='number'?G.approval:60) + dApp, 0, 200);
+  }
 
   // 5) 회상 계산(플래그 추가 전) → 6) 플래그 적립 → 7) 지연 예약
   c._echo = narrativeEcho(c);
@@ -446,7 +460,11 @@ function choose(choiceIdx){
   G.history.push({
     step:G.currentStep, tier:item.tier, title:scene.title, choice:c.label, tag:c.tag,
     sdg:c.fx.sdg, baseScore:c.fx.score, feedback:c.feedback, fact:c.fact, flag:c.flag||null,
+    gambled: !!c.gamble, won: c.gamble ? rolledNote.includes('성공') : null,
   });
+
+  // 선택의 실제 결과 델타를 기록 → 피드백 화면에서 「이 선택이 좋았나/나빴나」를 명확히 보여줌
+  c._delta = { temp:G.stats.temp - old.temp, sea:G.stats.sea - old.sea, eco:G.stats.eco - old.eco };
 
   // 계기판 반영 + 수치 변화 토스트(난이도 A·B 숨김)
   rollNum('vTemp', old.temp, G.stats.temp, 500, true);
@@ -455,6 +473,12 @@ function choose(choiceIdx){
   updateBars(); updateHeat();
   showStatToast(G.stats.temp - old.temp, G.stats.sea - old.sea, G.stats.eco - old.eco);
   if(billMsg) deferredToast(billMsg);
+  // 오버차지 최초 돌파 알림(사람들이 상한 초과를 놓치지 않도록)
+  if(diffCfg().budget && !G.ocAnnounced){
+    const res = diffCfg().politics ? (G.approval||60) : G.budget;
+    const max = diffCfg().politics ? 100 : G.budgetTotal;
+    if(max>0 && res>max){ G.ocAnnounced = true; resToast('⚡ 오버차지 돌파! 상한을 넘겨 무제한 비축을 시작합니다', diffCfg().politics?'sky':'amber'); }
+  }
   if(Math.floor(old.eco/33) !== Math.floor(G.stats.eco/33)) updateSky();
 
   // 임계점 도달 시 화면 붕괴 연출
@@ -479,6 +503,7 @@ function choose(choiceIdx){
   }
 
   G.currentStep++;
+  if(G.currentStep < TOTAL_STAGES) resourceTurnTick();   // 예산 이자 / 정치 자본 충원·임기 심사
   saveGame();
 
   if(G.currentStep >= TOTAL_STAGES){
@@ -499,6 +524,124 @@ function deferredToast(msg){
   t.innerHTML = '⏰ <b>과거의 청구서</b><br/><span class="font-normal text-red-300">'+msg+'</span>';
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 3600);
+}
+/* ── 자원 토스트(이자/충원/불신임 등) ── */
+function resToast(msg, tone){
+  const map={ amber:'text-amber-200 border-amber-500/50', sky:'text-sky-200 border-sky-500/50', red:'text-red-200 border-red-600/50' };
+  const t = document.createElement('div');
+  t.className = 'fixed left-1/2 -translate-x-1/2 z-[94] max-w-xs text-center glass-main rounded-xl px-4 py-2 text-[11px] font-bold animate-pop shadow-2xl border '+(map[tone]||map.amber);
+  t.style.top = 'calc(128px + var(--safe-top))';
+  t.innerHTML = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3000);
+}
+
+/* ── [정치] 선택이 지지율(여론)에 주는 영향 ──
+   대담한 친환경 규제일수록 단기 인기가 떨어지고, 인기영합(환경 포기)은 지지율이 오릅니다. */
+function approvalDelta(c){
+  const s = c.fx.score;
+  if(s>=20) return -6;   // 최선(강한 규제) = 단기 인기 하락
+  if(s>=10) return -2;
+  if(s>=8)  return +1;   // 균형형 = 소폭 호감
+  return +8;             // 환경 포기(인기영합) = 지지율 급등
+}
+
+/* ═══════════════ 패닉 버튼(판당 1회) ═══════════════
+   예산: 지구 저당 금융(환경 담보 긴급 예산) / 정치: 우민화(지구를 불태워 표 매수) */
+function usePanic(){
+  if(!G || G.renderingHalted || locking || G.panicUsed) return;
+  const d = diffCfg(); if(!d.budget) return;
+  G.panicUsed = true;
+  const old = { ...G.stats };
+  if(d.politics){
+    G.stats.temp = G.stats.temp + 0.25;
+    G.approval = clamp((typeof G.approval==='number'?G.approval:60) + 15, 0, 200);
+    resToast('📢 우민화 정책 — 🌡️+0.25°C 대가로 지지율 +15%', 'red');
+  } else {
+    G.stats.eco  = clamp(G.stats.eco - 20, 0, 100);
+    G.stats.temp = G.stats.temp + 0.15;
+    const inject = Math.round(G.budgetTotal * 0.4);
+    G.budget = G.budget + inject;
+    resToast(`🏦 지구 저당 금융 — 🌱-20%·🌡️+0.15°C 대가로 예산 +${inject}억`, 'red');
+  }
+  const root = document.getElementById('app-root');
+  if(root){ root.classList.add('earthquake','glitch-red'); setTimeout(()=>root.classList.remove('earthquake','glitch-red'), 500); }
+  rollNum('vTemp', old.temp, G.stats.temp, 400, true);
+  rollNum('vEco',  old.eco,  G.stats.eco,  400, false);
+  updateBars(); updateHeat(); updateSky();
+  if(soundEnabled) playChordSynth([146.83,110],'sawtooth',0.4,0.05);
+  saveGame();
+  if(G.stats.eco<=0 || G.stats.temp>=d.suddenTemp){
+    if(G.stats.eco<=0) executeSuddenDeath('EMPTY'); else executeSuddenDeath('BOIL');
+    return;
+  }
+  renderCurrentScenario();   // 배너·버튼 갱신(패닉 버튼 소진 반영)
+}
+
+/* ═══════════════ 개인화 엔딩 크로니클: G.history로 통치 기록을 한 편의 서사로 ═══════════════ */
+function buildChronicle(){
+  const h = (G && G.history) || [];
+  if(!h.length) return ['조기 종료로 통치 기록이 충분히 남지 않았습니다.'];
+  const has = f => h.some(x=>x.flag===f);
+  const lines = [];
+  const best = h.filter(x=>x.baseScore>=20).length;
+  const worst= h.filter(x=>x.baseScore<=6).length;
+  if(has('coal_on')) lines.push('초반 재정 위기를 넘기려 <b>[석탄 발전소 재가동]</b>이라는 악마의 계약에 서명했습니다. 곳간은 채웠으나 하늘이 잿빛으로 물들었죠.');
+  const wonG  = h.find(x=>x.gambled && x.won===true);
+  const lostG = h.find(x=>x.gambled && x.won===false);
+  if(wonG)  lines.push(`<b>[${wonG.choice}]</b> 도박은 운 좋게 맞아떨어져 위기를 모면했지만, 다음 도박까지 성공하리란 보장은 없었습니다.`);
+  if(lostG) lines.push(`<b>[${lostG.choice}]</b> 도박이 빗나가며 통제 불능의 연쇄 피해가 들이닥쳤습니다.`);
+  if(has('denial'))   lines.push('한때 <b>[해안의 위기를 외면]</b>한 대가로, 빙상 붕괴가 끝내 도시 한복판까지 밀려들었습니다.');
+  if(has('reckless')) lines.push('검증을 건너뛴 <b>[무모한 강행]</b>이 거듭되며 통제실의 신뢰에 금이 갔습니다.');
+  if(G && G.panicUsed) lines.push(diffCfg().politics
+    ? '벼랑 끝에서 <b>[우민화 정책]</b>으로 지구를 불태워 표를 사들이며 자리를 보전했습니다.'
+    : '파산 직전 <b>[지구 저당 금융]</b>으로 환경을 담보 잡혀 한 턴을 더 버텼습니다.');
+  if(has('great_transition')) lines.push('그리고 마지막 순간, 봉인되어 있던 <b>[대전환 선언]</b>에 서명하며 인류세의 폭주를 멈춰 세웠습니다.');
+  const last = h[h.length-1];
+  if(last && last.baseScore>=20 && !has('great_transition'))
+    lines.push(`마지막 단계에서 <b>[${last.choice}]</b>에 전 재산을 쏟아부어, 지구를 극적인 생존의 궤도로 끌어올렸습니다.`);
+  // 종합 한 줄
+  if(best>=worst+3)      lines.push(`총 ${best}번, 당신은 눈앞의 이익보다 지구를 먼저 택한 통치자였습니다.`);
+  else if(worst>=best+3) lines.push(`총 ${worst}번, 당신은 내일의 지구를 오늘의 곳간과 맞바꾼 통치자였습니다.`);
+  else                   lines.push('당신의 10번의 결단은 이상과 현실 사이를 끊임없이 저울질한 줄타기였습니다.');
+  return lines.slice(0, 6);
+}
+
+/* 정치 임기 심사 동적 커트라인: 3단계 35% → 6단계 55% → 9단계 75% (후반일수록 여론 눈높이 급상승) */
+function reviewCut(step){ return step===3?35 : step===6?55 : step===9?75 : null; }
+
+/* ── 자원 모드 턴 정산: 예산=복리 이자+블랙스완 / 정치=지지율 충원+임기 심사 (상한 없음) ── */
+function resourceTurnTick(){
+  const d = diffCfg(); if(!d.budget || !G) return;
+  if(d.politics){
+    const ap = (typeof G.approval==='number') ? G.approval : 60;
+    const regen = Math.round((ap/100) * 60);                 // 지지율 높을수록(오버차지 포함) 충원↑
+    if(regen>0){ G.budget = G.budget + regen; resToast(`🗳️ 지지율 ${ap}% → 정치자본 +${regen}pt 충원`, 'sky'); }
+    const cut = reviewCut(G.currentStep);                     // 동적 커트라인
+    if(cut!==null && ap < cut){
+      const loss = Math.round(G.budget * 0.35);
+      G.budget = Math.max(0, G.budget - loss);
+      resToast(`🗳️ ${G.currentStep+1}단계 임기 심사: 지지율 ${ap}% < ${cut}% 불신임 — 정치자본 -${loss}pt`, 'red');
+    }
+  } else {
+    const interest = Math.round(G.budget * 0.08);            // 남긴 예산 복리 이자(상한 없음 → 스노우볼)
+    if(interest>0){ G.budget = G.budget + interest; resToast(`💰 예산 이자 +${interest}억 (아낄수록 복리)`, 'amber'); }
+    // 🌡️ 기후 재난 복구비: 기온이 높을수록 매 턴 보유 예산의 일부를 강제 차압 → 저축 고인물·돈복사 견제
+    //    유지비 = 현재 예산 × (기온 × 0.05)  ·  1.6°C 부근에서 이자(+8%)와 균형, 그 이상이면 순감소
+    const upkeep = Math.round(G.budget * G.stats.temp * 0.05);
+    if(upkeep>0){ G.budget = Math.max(0, G.budget - upkeep); resToast(`🌡️ 기후 재난 복구비 -${upkeep}억 (기온 ${G.stats.temp.toFixed(1)}°C)`, 'red'); }
+    // 블랙스완: 총예산 초과로 과대 축적할수록 확률적 시장 쇼크로 비축분 증발(고인물 저축 방지)
+    if(G.budgetTotal>0 && G.budget > G.budgetTotal){
+      const over = G.budget / G.budgetTotal - 1;             // 100% 초과 비율
+      const p = clamp(over * 0.28, 0, 0.55);                 // 150%→0.14 · 200%→0.28 · 300%→0.55
+      if(RNG() < p){
+        const evap = Math.round(G.budget * 0.28);
+        G.budget = Math.max(0, G.budget - evap);
+        const kind = RNG()<0.5 ? '초인플레이션' : '녹색 거품 붕괴';
+        resToast(`💥 시장 쇼크: ${kind} — 비축 예산 -${evap}억 증발`, 'red');
+      }
+    }
+  }
 }
 
 /* ═══════════════ 6. 엔딩 등급 매트릭스 + 조기 강제 붕괴 ═══════════════ */
@@ -692,12 +835,69 @@ function renderCurrentScenario(){
   // 자원 현황 배너(예산/정치자본)
   let budgetBar = '';
   if(budgetMode){
-    const pct = clamp(G.budget / Math.max(1,G.budgetTotal) * 100, 0, 100);
-    budgetBar = `
-      <div class="mb-3 rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5">
-        <div class="flex justify-between text-[11px] font-bold text-amber-200 mb-1"><span>${theme.emoji} 남은 ${theme.name}</span><span>${G.budget}${theme.unit} / ${G.budgetTotal}${theme.unit}</span></div>
-        <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style="width:${pct}%"></div></div>
+    const rawPct = Math.round(G.budget / Math.max(1,G.budgetTotal) * 100);
+    const over = rawPct > 100;          // 오버차지: 금빛으로 흐르는 「과충전」 연출(좋은 상태)
+    if(over){
+      const overAmt = G.budget - G.budgetTotal;
+      budgetBar = `
+      <div class="mb-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-yellow-400/10 border border-amber-300/60 p-2.5 shadow-[0_0_18px_-6px_rgba(251,191,36,.9)]">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-[11px] font-bold text-amber-200">${theme.emoji} 남은 ${theme.name}</span>
+          <span class="oc-chip text-[10px] rounded-full px-2 py-0.5 font-black bg-amber-300 text-slate-900">⚡ OVERCHARGE ${rawPct}%</span>
+        </div>
+        <div class="h-2 w-full rounded-full bg-black/30 overflow-hidden"><div class="h-full rounded-full bar-oc" style="width:100%"></div></div>
+        <div class="flex justify-between text-[10px] mt-1"><span class="text-amber-100 font-extrabold">${G.budget}${theme.unit}</span><span class="text-amber-300 font-bold">⚡ +${overAmt}${theme.unit} 초과 비축</span></div>
       </div>`;
+    } else {
+      const low = rawPct <= 25;         // 부족: 붉은 경고(위험)
+      budgetBar = `
+      <div class="mb-3 rounded-xl bg-amber-500/10 border ${low?'border-red-400/40':'border-amber-500/25'} p-2.5">
+        <div class="flex justify-between items-center text-[11px] font-bold text-amber-200 mb-1">
+          <span>${theme.emoji} 남은 ${theme.name}</span>
+          <span class="${low?'text-red-300':''}">${G.budget}${theme.unit} / ${G.budgetTotal}${theme.unit} <span class="opacity-70">(${rawPct}%)</span></span>
+        </div>
+        <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full ${low?'bg-gradient-to-r from-red-500 to-rose-600':'bg-gradient-to-r from-amber-400 to-orange-500'}" style="width:${clamp(rawPct,2,100)}%"></div></div>
+      </div>`;
+    }
+  }
+
+  // [정치] 지지율(여론) 게이지 — 100% 초과 오버차지(후반 임기 심사 대비 버퍼)
+  let approvalBar = '';
+  if(diffCfg().politics){
+    const a = (typeof G.approval==='number')?G.approval:60;
+    const over = a > 100;
+    const nextStep = (G.currentStep<3?3:G.currentStep<6?6:G.currentStep<9?9:null);
+    const nextCut = nextStep!==null ? reviewCut(nextStep) : null;
+    const note = `<div class="text-[9px] text-sky-300/70 mt-1">강한 친환경 규제는 지지율↓ · 인기영합은 지지율↑${nextCut!==null?` · 다음 임기 심사: ${nextStep+1}단계 ${nextCut}% 미만 불신임`:''}</div>`;
+    if(over){
+      approvalBar = `
+      <div class="mb-3 rounded-xl bg-gradient-to-r from-fuchsia-500/15 to-violet-400/10 border border-fuchsia-300/60 p-2.5 shadow-[0_0_18px_-6px_rgba(216,180,254,.9)]">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-[11px] font-bold text-fuchsia-100">📊 지지율(여론)</span>
+          <span class="oc-chip text-[10px] rounded-full px-2 py-0.5 font-black bg-fuchsia-300 text-slate-900">⚡ OVERCHARGE ${a}%</span>
+        </div>
+        <div class="h-2 w-full rounded-full bg-black/30 overflow-hidden"><div class="h-full rounded-full bar-oc oc-violet" style="width:100%"></div></div>
+        <div class="text-[10px] text-fuchsia-200 font-bold mt-1 text-right">⚡ +${a-100}%p 여론 버퍼 (임기 심사 대비)</div>
+        ${note}
+      </div>`;
+    } else {
+      const col = a>=55 ? 'from-sky-400 to-emerald-400' : a>=35 ? 'from-amber-400 to-orange-500' : 'from-red-500 to-rose-600';
+      approvalBar = `
+      <div class="mb-3 rounded-xl bg-sky-500/10 border ${a<35?'border-red-400/40':'border-sky-500/25'} p-2.5">
+        <div class="flex justify-between items-center text-[11px] font-bold text-sky-200 mb-1"><span>📊 지지율(여론)</span><span class="${a<35?'text-red-300':''}">${a}%</span></div>
+        <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full bg-gradient-to-r ${col}" style="width:${clamp(a,2,100)}%"></div></div>
+        ${note}
+      </div>`;
+    }
+  }
+
+  // 비상 패닉 버튼(예산/정치, 판당 1회)
+  let panicHTML = '';
+  if(budgetMode && !G.panicUsed){
+    const lbl = diffCfg().politics
+      ? '📢 우민화 정책 — 🌡️+0.25°C로 지지율 +15%'
+      : `🏦 지구 저당 금융 — 🌱-20%·🌡️+0.15°C로 예산 +${Math.round(G.budgetTotal*0.4)}억`;
+    panicHTML = `<button onclick="usePanic()" class="w-full mb-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-200 text-[11px] font-bold py-2.5 active:scale-95 transition hover:bg-red-500/20">⚠️ 비상대책(1회) · ${lbl}</button>`;
   }
 
   const ringHTML = (currentDiff==='B')
@@ -722,6 +922,8 @@ function renderCurrentScenario(){
       ${voiceHTML}
       <p id="sceneText" class="text-xs text-slate-300 leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5 mb-4 min-h-[3.5rem]"></p>
       ${budgetBar}
+      ${approvalBar}
+      ${panicHTML}
       <div class="space-y-2">${choicesHTML}</div>
     </div>`;
 
@@ -733,9 +935,47 @@ function renderCurrentScenario(){
   });
 }
 
+/* ── 선택 품질 판정: 점수(결정의 질)로 「좋은/나쁜 선택」을 한눈에 ──
+   20=최선 / 10=절충 / 8=아쉬운 균형 / 그 외=값비싼 선택 */
+function choiceVerdict(score){
+  if(score>=20) return { icon:'🟢', label:'최선의 선택', sub:'지구를 최우선에 둔 모범적인 결단이었습니다.', col:'#34d399', cls:'border-emerald-400/50 bg-emerald-500/10' };
+  if(score>=10) return { icon:'🟡', label:'절충한 선택', sub:'얻은 만큼 내준, 무난한 타협이었습니다.',       col:'#fbbf24', cls:'border-amber-400/50 bg-amber-500/10' };
+  if(score>=8)  return { icon:'🟠', label:'아쉬운 균형', sub:'균형을 노렸지만 효과는 제한적이었습니다.',       col:'#fb923c', cls:'border-orange-400/50 bg-orange-500/10' };
+  return            { icon:'🔴', label:'값비싼 선택', sub:'당장은 쉬웠지만, 지구가 그 대가를 치릅니다.',     col:'#f87171', cls:'border-red-500/50 bg-red-500/10' };
+}
+
 function renderFeedbackPage(choice){
   const stage = document.getElementById('stage');
   const meta = SDG[choice.fx.sdg] || { name:'지속가능개발목표', color:'#64748b' };
+
+  // ① 결정의 질 판정 배지(점수 기반) — 난이도와 무관하게 항상 표시
+  const v = choiceVerdict(choice.fx.score);
+  const verdictHTML = `
+    <div class="mb-4 rounded-xl border ${v.cls} p-3 flex items-center gap-3 text-left animate-pop">
+      <div class="text-3xl leading-none shrink-0">${v.icon}</div>
+      <div class="min-w-0 flex-1">
+        <div class="font-black text-sm" style="color:${v.col}">${v.label}<span class="ml-1.5 text-[11px] font-bold text-slate-300">· 지속가능성 +${choice.fx.score}점</span></div>
+        <div class="text-[11px] text-slate-300 mt-0.5">${v.sub}</div>
+      </div>
+    </div>`;
+
+  // ② 이번 턴 실제 지표 변화(좋으면 초록·나쁘면 빨강) — 결과를 수치로 명확히
+  const dd = choice._delta || { temp:0, sea:0, eco:0 };
+  const seg = (val, unit, invertGood) => {
+    if(Math.abs(val) < 0.005) return `<span class="text-slate-400">±0${unit}</span>`;
+    const sign = val > 0 ? '+' : '';
+    const good = invertGood ? val < 0 : val > 0;        // eco는 +가 좋음 / temp·sea는 -가 좋음
+    const col = good ? '#34d399' : '#f87171';
+    const num = unit === '°C' ? val.toFixed(2) : Math.round(val);
+    return `<span style="color:${col}">${sign}${num}${unit}</span>`;
+  };
+  const deltaHTML = `
+    <div class="grid grid-cols-3 gap-2 mb-5 text-xs font-extrabold">
+      <span class="rounded-lg bg-black/25 border border-white/5 py-2 text-center">🌡️ ${seg(dd.temp,'°C',false)}</span>
+      <span class="rounded-lg bg-black/25 border border-white/5 py-2 text-center">🌊 ${seg(dd.sea,'cm',false)}</span>
+      <span class="rounded-lg bg-black/25 border border-white/5 py-2 text-center">🌱 ${seg(dd.eco,'%',true)}</span>
+    </div>`;
+
   const rolledHTML = choice._rolled
     ? `<div class="mb-4 rounded-xl border ${choice._rolled.includes('성공')?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200':'border-red-500/40 bg-red-500/10 text-red-200'} p-2.5 text-xs font-bold">${choice._rolled}</div>` : '';
   const echoHTML = choice._echo
@@ -744,6 +984,8 @@ function renderFeedbackPage(choice){
     <div class="glass-main p-6 rounded-2xl text-center shadow-xl animate-fade-in">
       <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">정책 시행 결과</div>
       <h3 class="text-xl font-black text-white mb-4">"${choice.tag}"</h3>
+      ${verdictHTML}
+      ${deltaHTML}
       <p class="text-sm text-slate-300 leading-relaxed mb-5">${choice.feedback}</p>
       ${rolledHTML}
       ${echoHTML}
@@ -780,6 +1022,14 @@ function renderEndingCard(result){
   const scorePct = Math.round((s.score / MAX_SCORE) * 100);
   const d = diffCfg();
   LAST_ENDING = { result, s:{ ...s }, scorePct, history: hist.map(h=>({ sdg:h.sdg, step:h.step, choice:h.choice, baseScore:h.baseScore })) };
+
+  // 📜 개인화 통치 크로니클
+  const chron = buildChronicle();
+  const chronicleHTML = `
+    <div class="text-[11px] font-bold text-amber-300 mb-1.5">📜 당신이 통치한 2050년의 기록</div>
+    <div class="space-y-1.5 mb-3">
+      ${chron.map(t=>`<div class="text-[11px] leading-relaxed text-slate-200 bg-white/5 border border-white/5 rounded-lg p-2">${t}</div>`).join('')}
+    </div>`;
 
   // SDGs 엔딩 성적표(난이도와 무관하게 항상 SDG 뱃지 노출)
   let report = hist.map(l=>{
@@ -836,8 +1086,11 @@ function renderEndingCard(result){
         ${(d.budget && G) ? `<div class="px-5 pt-2 shrink-0"><div class="rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5 text-center text-[11px] font-bold text-amber-200">${resTheme().emoji} 남은 ${resTheme().name} ${G.budget}${resTheme().unit} / ${G.budgetTotal}${resTheme().unit}</div></div>` : ''}
 
         <div class="px-5 pt-3 pb-1 flex-1 min-h-0 flex flex-col">
-          <div class="text-[11px] font-bold text-slate-300 mb-1.5 shrink-0">🎓 SDGs 엔딩 성적표</div>
-          <div class="space-y-1.5 overflow-y-auto pr-1">${report}</div>
+          <div class="overflow-y-auto pr-1">
+            ${chronicleHTML}
+            <div class="text-[11px] font-bold text-slate-300 mb-1.5">🎓 SDGs 엔딩 성적표</div>
+            <div class="space-y-1.5">${report}</div>
+          </div>
         </div>
 
         <div class="px-5 pb-5 pt-2 shrink-0">
@@ -1080,6 +1333,22 @@ function screenIntro(){
         <div class="mb-1.5 text-[11px] font-bold text-slate-300 text-left">⚙️ 난이도 선택</div>
         <div class="grid grid-cols-4 gap-2 mb-1.5">${diffHTML}</div>
         <p class="text-[10px] text-slate-400 leading-relaxed mb-3 min-h-[26px]">${diffCfg().note}</p>
+
+        <!-- 🪙 특수 모드 + 오버차지 가이드(접이식, JS 불필요) -->
+        <details class="mb-3 rounded-xl bg-white/5 border border-white/10 overflow-hidden">
+          <summary class="cursor-pointer select-none list-none px-3 py-2.5 text-[11px] font-bold text-slate-200 flex items-center justify-between">
+            <span>🪙 특수 모드 가이드 — 예산 · 정치 & ⚡오버차지</span>
+            <span class="text-slate-500 text-[10px]">자세히 ▾</span>
+          </summary>
+          <div class="px-3 pb-3 pt-1 space-y-2 text-[10px] leading-relaxed text-slate-300">
+            <div><b class="text-amber-300">💰 예산 모드</b> — 매 턴 선택은 <b>2개 소비 / 2개 자금 확보(환급)</b>로 갈립니다. 남긴 예산엔 복리 이자(+8%)가 붙지만, 지구가 뜨거울수록 기후 재난 복구비가 매 턴 차압돼요.</div>
+            <div><b class="text-sky-300">🗳️ 정치 모드</b> — 강한 친환경 규제는 지지율↓, 인기영합(환경 포기)은 지지율↑. <b>3·6·9단계 임기 심사</b>(35→55→75%)를 통과해야 자리를 지킵니다.</div>
+            <div class="rounded-lg bg-gradient-to-r from-amber-500/15 to-fuchsia-500/10 border border-amber-300/40 p-2.5">
+              <b class="text-amber-200">⚡ 오버차지 (상한 초과 비축)</b> — 자원 보유 <b>상한이 없습니다</b>. 100%를 넘기면 게이지가 금빛(예산)·보랏빛(정치)으로 흐르는 「과충전」 상태가 돼요. 예산은 <b>후반 메가프로젝트 몰빵용 실탄</b>, 정치는 <b>임기 심사를 버티는 여론 버퍼</b>로 쓰입니다. (부족할 때만 붉은 경고)
+            </div>
+            <div class="text-slate-500">💡 두 모드 모두 벼랑 끝 탈출용 <b>비상대책(판당 1회)</b>이 숨어 있습니다.</div>
+          </div>
+        </details>
         ${dailyHTML}
 
         <button id="startBtn" class="glow-pulse w-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black py-3.5 text-sm active:scale-95 transition shadow-xl mb-2.5">
@@ -1110,7 +1379,8 @@ function startGame(){
   setupRNG();   // 데일리 모드면 날짜 시드 RNG로 교체(친구와 같은 판)
   G = { stats: freshStats(), history: [], currentStep: 0, gameQueue: [], modifier: null,
         renderingHalted: false, rollTimers: [], budget: 0, budgetTotal: 0,
-        flags: new Set(), pending: [], gambleWins: 0, choiceTimer: null, daily: dailyMode };
+        flags: new Set(), pending: [], gambleWins: 0, choiceTimer: null, daily: dailyMode,
+        approval: 60, panicUsed: false, ocAnnounced: false };   // [정치] 시작 지지율 60% · 패닉 1회 · 오버차지 최초 알림
   buildQueue();
   if(diffCfg().budget){ G.budgetTotal = computeBudget(); G.budget = G.budgetTotal; }
   document.getElementById('warn').className = 'hidden';
@@ -1140,6 +1410,7 @@ function saveGame(){
       currentStep:G.currentStep, gameQueue:G.gameQueue, stats:G.stats, history:G.history,
       diff:currentDiff, budget:G.budget, budgetTotal:G.budgetTotal, savedAt:Date.now(),
       flags:[...(G.flags||[])], pending:G.pending||[], gambleWins:G.gambleWins||0, daily:!!G.daily,
+      approval:(typeof G.approval==='number'?G.approval:60), panicUsed:!!G.panicUsed, ocAnnounced:!!G.ocAnnounced,
     }));
   }catch(e){}
 }
@@ -1165,7 +1436,8 @@ function loadGame(){
         history: saved.history, modifier: null, renderingHalted: false, rollTimers: [],
         budget: (typeof saved.budget==='number'?saved.budget:0), budgetTotal: (typeof saved.budgetTotal==='number'?saved.budgetTotal:0),
         flags: new Set(Array.isArray(saved.flags)?saved.flags:[]), pending: Array.isArray(saved.pending)?saved.pending:[],
-        gambleWins: saved.gambleWins||0, choiceTimer: null, daily: !!saved.daily };
+        gambleWins: saved.gambleWins||0, choiceTimer: null, daily: !!saved.daily,
+        approval: (typeof saved.approval==='number'?saved.approval:60), panicUsed: !!saved.panicUsed, ocAnnounced: !!saved.ocAnnounced };
   document.getElementById('endingOverlay').classList.add('hidden');
   syncHUD();
   renderCurrentScenario();

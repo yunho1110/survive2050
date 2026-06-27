@@ -4,6 +4,9 @@ package.json
 package-lock.json
 test.js
 
+# 로컬 미리보기 설정(배포에 불필요)
+.claude/
+
 # OS/에디터
 .DS_Store
 Thumbs.db
