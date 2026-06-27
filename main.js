@@ -540,7 +540,7 @@ function resToast(msg, tone){
    대담한 친환경 규제일수록 단기 인기가 떨어지고, 인기영합(환경 포기)은 지지율이 오릅니다. */
 function approvalDelta(c){
   const s = c.fx.score;
-  if(s>=20) return -6;   // 최선(강한 규제) = 단기 인기 하락
+  if(s>=20) return -4;   // 최선(강한 규제) = 단기 인기 하락(−6→−4로 완화: 정공법 연타 시 임기 심사 통과 여지)
   if(s>=10) return -2;
   if(s>=8)  return +1;   // 균형형 = 소폭 호감
   return +8;             // 환경 포기(인기영합) = 지지율 급등
@@ -615,7 +615,7 @@ function resourceTurnTick(){
   const d = diffCfg(); if(!d.budget || !G) return;
   if(d.politics){
     const ap = (typeof G.approval==='number') ? G.approval : 60;
-    const regen = Math.round((ap/100) * 60);                 // 지지율 높을수록(오버차지 포함) 충원↑
+    const regen = Math.round((ap/100) * 80);                 // 지지율 높을수록(오버차지 포함) 충원↑ (60→80: 정공법 자본 회전 보강)
     if(regen>0){ G.budget = G.budget + regen; resToast(`🗳️ 지지율 ${ap}% → 정치자본 +${regen}pt 충원`, 'sky'); }
     const cut = reviewCut(G.currentStep);                     // 동적 커트라인
     if(cut!==null && ap < cut){
@@ -687,7 +687,8 @@ function getEnding(ratio){
     top:     d.topCut,
     aCut:    Math.max(d.topCut - 0.12, 0.5),
     survive: d.surviveCut,
-    cCut:    Math.max(d.surviveCut - 0.20, 0.2),
+    // GREY/DARK 경계를 「생존 가능한 최저 점수」 위로 올림 → 균형형(8점)만 반복해 살아남은 판이 DARK로 떨어져 도달 가능
+    cCut:    Math.max(d.surviveCut - 0.12, 0.40),
   };
   evaluateCombos();
   const rules = window.ENDING_RULES || [];
@@ -1390,11 +1391,14 @@ function startGame(){
   syncHUD(); saveGame();
   renderCurrentScenario();
 }
-/* 「예산/정치」: 전체 큐의 최대 지출 합의 70%만 지급(자금 확보형 환급으로 숨통) */
+/* 「예산/정치」: 전체 큐의 최대 지출 합의 일부만 지급(자금 확보형 환급으로 숨통)
+   · 예산 70% / 정치 95% — 정치는 지지율 페널티·임기 심사가 추가 족쇄라 초기 자본을 더 줘
+     S·대전환 엔딩까지 「밀어붙일 루트」를 연다(점수 상한 0.83 → 0.85+ 돌파 가능). */
 function computeBudget(){
   let maxSpend = 0;
   G.gameQueue.forEach(it=>{ maxSpend += Math.max(...it.scene.choices.map(c=>costOf(c, it.tier))); });
-  return Math.round(maxSpend * 0.7 / 10) * 10;
+  const mult = diffCfg().politics ? 0.95 : 0.7;
+  return Math.round(maxSpend * mult / 10) * 10;
 }
 function restartGame(){
   if(G) G.renderingHalted = false;
