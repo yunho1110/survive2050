@@ -1,0 +1,1188 @@
+/* ═══════════════════════════════════════════════════════════════
+   2050 · 멸망 직전 지구에서 살아남기 — main.js
+   게임 로직 + 사운드 + 돌발변수 + 업적 + 난이도 + 시나리오 풍경 아트
+   + 인스타 스토리 공유용 카드뉴스 엔딩 + 저장 레이어.
+   data.js(SDG / START / SCENARIOS) 다음에 로드됩니다.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 큐 구성: 그룹별 추출 개수 + 위기 tier. 합계 = 10단계 ── */
+const QUEUE_PLAN = [
+  { group:'early', pick:2, tier:1 },
+  { group:'mid',   pick:3, tier:2 },
+  { group:'late',  pick:3, tier:3 },
+  { group:'final', pick:2, tier:4 },
+];
+const TOTAL_STAGES = QUEUE_PLAN.reduce((s,p)=>s+p.pick, 0); // 10
+const MAX_SCORE = TOTAL_STAGES * 20;                        // 200 (시나리오당 최고 20점)
+
+/* ═══════════════ 난이도 시스템 (기본 / 도전 A / 하드코어 B) ═══════════════
+   hideHints  : 선택지의 정답 힌트 태그 + SDG 뱃지 숨김 + 선택 후 수치 변화 토스트 숨김
+   suddenTemp : 이 기온(°C) 이상 도달 시 즉시 붕괴 엔딩
+   topCut     : 재생(최상위 S등급) 컷오프 비율
+   surviveCut : 생존(B등급) 컷오프 비율
+   collapse   : 기온 ≥ suddenTemp 또는 생태계 0%에서 조기 종료(F등급) 적용
+*/
+const DIFFS = {
+  A:      { key:'A',      label:'도전',     emoji:'🔥', hideHints:true,  suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:false,
+            note:'힌트·뱃지·수치를 모두 가린 진짜 딜레마. 모든 보기가 장점과 숨은 대가를 가집니다.' },
+  B:      { key:'B',      label:'하드코어',  emoji:'☠️', hideHints:true, suddenTemp:3.00, topCut:0.90, surviveCut:0.60, collapse:true,  budget:false,
+            note:'전 시나리오 딜레마 + 기온 3.0°C·생태계 0% 도달 시 즉시 붕괴(F) + 등급 컷오프 최상.' },
+  BUDGET: { key:'BUDGET', label:'예산',     emoji:'💰', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true,
+            note:'정해진 예산 안에서만 정책을 집행. 선택지마다 비용이 달라, 비싼 친환경안을 모두 살 수는 없습니다.' },
+  /* 「정치」: 예산 머신을 재사용하되 자원을 「정치자본」으로 테마링. 친환경·고강도 정책일수록 정치자본을 크게 소모 */
+  POLITICS:{ key:'POLITICS', label:'정치', emoji:'🗳️', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true, politics:true,
+            note:'정치자본으로 정책을 집행. 옳은 줄 알아도, 자본이 없으면 강한 친환경안을 끝까지 밀어붙일 수 없습니다.' },
+};
+let currentDiff = 'A';   // 기본을 「도전」으로 → 정답이 안 보이는 진짜 딜레마부터 시작
+let dailyMode = false;   // 🗓️ 오늘의 지구: 날짜 시드로 모두가 같은 판(친구와 점수 비교)
+
+/* ── 자원 테마(예산/정치자본): 「정치」 모드에서 라벨·단위·이모지만 교체 ── */
+function resTheme(){ return diffCfg().politics
+  ? { emoji:'🗳️', unit:'pt', name:'정치자본' }
+  : { emoji:'💰', unit:'억',  name:'예산' }; }
+
+/* ═══════════════ 시드 RNG(데일리 모드) ═══════════════
+   기본은 Math.random. 데일리 모드면 날짜 시드로 결정론적 RNG로 교체. */
+let RNG = Math.random;
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function todaySeed(){ const d=new Date(); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); }
+function setupRNG(){ RNG = dailyMode ? mulberry32(todaySeed()) : Math.random; }
+function toggleDaily(){ dailyMode = !dailyMode; screenIntro(); }
+
+/* ── 「예산」 난이도: 선택지 비용 산출(억원) ──
+   친환경·자본집약 정책일수록 비싸고, 후반 메가프로젝트일수록 단가가 오릅니다.
+   점수(친환경도) + 단계(tier) + 적극적 기온 감축폭을 비용으로 환산. */
+function costOf(choice, tier){
+  const s = choice.fx.score;
+  // 순비용(net) — 양수=지출, 음수=「자금 확보」(환급).
+  //   친환경(20)일수록 큰 지출 / 환경을 포기하는 하(6점) 선택일수록 오히려 자원을 돌려받습니다.
+  //   → 예산이 바닥나면 "이번 턴은 눈 딱 감고 환경 포기, 자금 확보" 같은 전략적 타협이 가능.
+  let c;
+  if(s>=20)      c = 170 + (tier-1)*35 + Math.round(Math.max(0,-choice.fx.temp)*55); // 최선: 자본집약
+  else if(s>=10) c = 95  + (tier-1)*20;                                              // 절충(중): 중간 지출
+  else if(s>=8)  c = 30  - (tier-1)*4;                                               // 신규 절충: 소폭 지출
+  else           c = -(28 + (tier-1)*8);                                             // 환경 포기(하·6점): 자금 확보
+  return c;
+}
+function diffCfg(){ return DIFFS[currentDiff] || DIFFS.NORMAL; }
+function selectDiff(key){ if(DIFFS[key]){ currentDiff = key; screenIntro(); } }
+
+/* ═══════════════ 시나리오 풍경 아트 매핑(40+ 시나리오 전체) ═══════════════
+   각 항목: { motif(중앙 모티프), floats(좌우 대칭 떠다니는 아이콘),
+             top/bot(하늘 그라데이션), ring(중앙 후광색) } */
+const SCENE_ART = {
+  blackout:    { motif:'🏙️', floats:['💡','⚡','🌃'], top:'#1a1730', bot:'#3a2a4a', ring:'rgba(250,204,21,.5)' },
+  drought:     { motif:'🏜️', floats:['☀️','🌾','💨'], top:'#3a2a14', bot:'#6b4a1e', ring:'rgba(251,191,36,.5)' },
+  water:       { motif:'🚰', floats:['💧','🌊','🏞️'], top:'#0b3a4a', bot:'#155e6b', ring:'rgba(56,189,248,.5)' },
+  smog:        { motif:'🏭', floats:['😷','🌫️','🚗'], top:'#2a2a2a', bot:'#4a443a', ring:'rgba(148,163,184,.45)' },
+  waste:       { motif:'🗑️', floats:['♻️','🛢️','🚮'], top:'#2a2418', bot:'#4a3a22', ring:'rgba(191,139,46,.5)' },
+  heat:        { motif:'🌡️', floats:['☀️','🥵','🌳'], top:'#3a1414', bot:'#7a2a1e', ring:'rgba(248,113,113,.55)' },
+  plastic:     { motif:'🥤', floats:['🐢','🛍️','♻️'], top:'#0b3344', bot:'#155e6b', ring:'rgba(45,212,191,.5)' },
+  greenery:    { motif:'🌳', floats:['🦋','🌷','🏙️'], top:'#0e3a2a', bot:'#16633f', ring:'rgba(74,222,128,.55)' },
+  ocean:       { motif:'🐟', floats:['🌊','🐚','🎣'], top:'#0b2a4a', bot:'#10456b', ring:'rgba(56,189,248,.5)' },
+  awareness:   { motif:'📢', floats:['📚','🌍','✊'], top:'#1a2a4a', bot:'#2a3a6b', ring:'rgba(96,165,250,.5)' },
+  food:        { motif:'🌾', floats:['🥕','🚜','🍞'], top:'#3a2e10', bot:'#6b551e', ring:'rgba(221,166,58,.5)' },
+  wildfire:    { motif:'🔥', floats:['🌲','🚒','💨'], top:'#3a1408', bot:'#7a2e12', ring:'rgba(251,146,60,.6)' },
+  flood:       { motif:'🌧️', floats:['🌊','🏚️','☔'], top:'#0b2a44', bot:'#143f63', ring:'rgba(56,189,248,.55)' },
+  grid:        { motif:'⚡', floats:['🔌','🏭','🔋'], top:'#2a2410', bot:'#4a3e1e', ring:'rgba(250,204,21,.55)' },
+  refugee:     { motif:'🚶', floats:['🧳','🏕️','🌍'], top:'#2a2418', bot:'#4a3a28', ring:'rgba(253,157,36,.5)' },
+  carbon:      { motif:'🏭', floats:['💨','💰','🌫️'], top:'#26262a', bot:'#44403a', ring:'rgba(148,163,184,.45)' },
+  coral:       { motif:'🪸', floats:['🐠','🌊','🐢'], top:'#0b2e4a', bot:'#10567a', ring:'rgba(45,212,191,.55)' },
+  biodiversity:{ motif:'🦌', floats:['🌲','🦋','🐦'], top:'#0e3326', bot:'#165a3a', ring:'rgba(86,192,43,.55)' },
+  acid:        { motif:'🌊', floats:['🐚','🧪','🐟'], top:'#0b2a3a', bot:'#134a55', ring:'rgba(45,212,191,.5)' },
+  mineral:     { motif:'⛏️', floats:['🪨','🏔️','💎'], top:'#2a221c', bot:'#4a3a30', ring:'rgba(191,139,46,.5)' },
+  glacier:     { motif:'🧊', floats:['🌊','🐧','❄️'], top:'#0b3a4a', bot:'#1a5a7a', ring:'rgba(125,211,252,.55)' },
+  storm:       { motif:'🌀', floats:['🌊','⚡','🌬️'], top:'#10203a', bot:'#1e3a5a', ring:'rgba(96,165,250,.55)' },
+  permafrost:  { motif:'🧊', floats:['💨','🌍','❄️'], top:'#16303a', bot:'#244a55', ring:'rgba(125,211,252,.5)' },
+  geo:         { motif:'🛰️', floats:['☁️','☀️','✈️'], top:'#0a1230', bot:'#2a2a5a', ring:'rgba(167,139,250,.5)' },
+  dac:         { motif:'🏭', floats:['🌲','💨','🔬'], top:'#10302a', bot:'#1e5045', ring:'rgba(45,212,191,.5)' },
+  floatcity:   { motif:'🏝️', floats:['🌊','🏙️','⛵'], top:'#0b2e4a', bot:'#10507a', ring:'rgba(56,189,248,.55)' },
+  rainforest:  { motif:'🌴', floats:['🦜','🌿','🐸'], top:'#0e3a26', bot:'#16633a', ring:'rgba(74,222,128,.6)' },
+  fusion:      { motif:'⚛️', floats:['⚡','🔆','🔬'], top:'#1a1040', bot:'#3a2a6a', ring:'rgba(167,139,250,.55)' },
+  seed:        { motif:'🌱', floats:['🌾','🧊','🔐'], top:'#10331e', bot:'#1e5a35', ring:'rgba(86,192,43,.55)' },
+  desal:       { motif:'🏝️', floats:['🌊','💧','☀️'], top:'#0b3344', bot:'#15607a', ring:'rgba(56,189,248,.5)' },
+  circular:    { motif:'♻️', floats:['🔁','🔋','🌍'], top:'#10302a', bot:'#1e5045', ring:'rgba(45,212,191,.5)' },
+  treaty:      { motif:'🌍', floats:['🤝','🕊️','📜'], top:'#0e2a4a', bot:'#1a4a7a', ring:'rgba(96,165,250,.55)' },
+  default:     { motif:'🌍', floats:['🌱','🌊','☁️'], top:'#0b2545', bot:'#1d3461', ring:'rgba(52,211,153,.5)' },
+};
+
+/* 시나리오 풍경 아트 HTML — 떠다니는 아이콘을 「좌우 대칭」으로 하늘에 균형 배치
+   (중앙 모티프·야경 스카이라인과 겹치지 않도록 상단 코너 영역에 배치) */
+function sceneArtHTML(scene){
+  const a = SCENE_ART[scene && scene.art] || SCENE_ART.default;
+  const POS = [ { t:'12%', x:'7%' }, { t:'34%', x:'15%' }, { t:'14%', x:'31%' } ];
+  const icons = (a.floats || []).slice(0, 3);
+  let floats = '';
+  icons.forEach((ic, i)=>{
+    const p = POS[i] || POS[0];
+    const dl = (i * 0.55).toFixed(2), dr = (i * 0.55 + 0.3).toFixed(2);
+    floats += `<span class="scene-float" style="left:${p.x}; top:${p.t}; animation-delay:${dl}s">${ic}</span>`;
+    floats += `<span class="scene-float" style="right:${p.x}; top:${p.t}; animation-delay:${dr}s">${ic}</span>`;
+  });
+  return `
+    <div class="scene-art" style="--art-top:${a.top}; --art-bot:${a.bot}; --art-ring:${a.ring}">
+      <div class="scene-glow"></div>
+      ${floats}
+      <div class="scene-skyline"></div>
+      <div class="scene-motif">${a.motif}</div>
+    </div>`;
+}
+
+/* ── 게임 상태 ── */
+let G = {
+  currentStep: 0,
+  gameQueue: [],
+  stats: { temp: START.temp, sea: START.sea, eco: START.eco, score: START.score },
+  history: [],
+  modifier: null,
+  renderingHalted: false,   // 조기 붕괴 시 비동기 렌더 차단 플래그
+  rollTimers: [],           // 작동 중 애니메이션 프레임 추적
+};
+function freshStats(){ return { temp:START.temp, sea:START.sea, eco:START.eco, score:START.score }; }
+let LAST_ENDING = null;     // 공유용으로 직전 엔딩 결과 캐시
+
+/* ── 전역 사운드 상태(브라우저 자동재생 정책 대응: 사용자 클릭 후 가동) ── */
+let audioCtx = null, bgmInterval = null, currentOscillators = [], soundEnabled = false;
+
+/* ═══════════════ 1. Web Audio 생성형 앰비언트 BGM ═══════════════ */
+function initAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+}
+function startAmbientBGM(){
+  if(!soundEnabled) return;
+  initAudio();
+  if(bgmInterval) clearInterval(bgmInterval);
+  // 생태계(eco) 상태를 주기적으로 스캔해 화음·파형을 동적으로 모핑
+  bgmInterval = setInterval(()=>{
+    if(!soundEnabled) return;
+    const eco = (G && G.stats) ? G.stats.eco : START.eco;
+    let freqs=[130.81,164.81,196.00], type='sine', duration=2.8, gainVal=0.04; // C Major(평화)
+    if(eco < 30){ freqs=[116.54,138.59,155.56,207.65]; type='sawtooth'; gainVal=0.015; duration=1.2; }   // 멸망: 불협화 톱니파
+    else if(eco < 60){ freqs=[110.00,130.81,164.81,220.00]; type='triangle'; duration=2.0; }              // 경고: 어두운 마이너
+    playChordSynth(freqs, type, duration, gainVal);
+  }, 2500);
+}
+function playChordSynth(freqs, type, duration, maxGain){
+  if(!audioCtx || audioCtx.state === 'suspended') return;
+  const now = audioCtx.currentTime;
+  const dur = Math.max(0.06, duration);
+  const attack = Math.min(0.4, dur * 0.35);                 // 페이드 인
+  const release = Math.min(0.5, dur * 0.4);                 // 페이드 아웃
+  const sustainEnd = Math.max(now + attack, now + dur - release); // 항상 now+attack 이상(음수/역순 시간 방지)
+  freqs.forEach(f=>{
+    const osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(f, now);
+    gainNode.gain.setValueAtTime(0, now);                                   // 클릭 노이즈 방지 페이드
+    gainNode.gain.linearRampToValueAtTime(maxGain, now + attack);
+    gainNode.gain.setValueAtTime(maxGain, sustainEnd);
+    gainNode.gain.linearRampToValueAtTime(0, now + dur);
+    osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + dur);
+    currentOscillators.push(osc);
+  });
+  if(currentOscillators.length > 20) currentOscillators.splice(0, 5);
+}
+function toggleSound(){
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('soundBtn');
+  if(soundEnabled){
+    btn.innerText = '🔊 소리 켜짐';
+    btn.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500 text-slate-950 active:scale-95 transition shadow-lg';
+    initAudio(); startAmbientBGM();
+    playChordSynth([523.25,659.25],'sine',0.3,0.05);
+  } else {
+    btn.innerText = '🔇 소리 꺼짐';
+    btn.className = 'px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition';
+    if(bgmInterval) clearInterval(bgmInterval);
+    currentOscillators.forEach(o=>{ try{ o.stop(); }catch(e){} });
+  }
+}
+
+/* ═══════════════ 2. 돌발 기후 변수(Random Modifiers) ═══════════════ */
+const MODIFIERS_POOL = [
+  { name:'🔥 초대형 아마존 대화재 촉발',     desc:'이번 턴 생태계 타격이 1.6배 가속화됩니다.', target:'eco',  multiply:1.6, type:'bad' },
+  { name:'🌊 슈퍼 엘니뇨 현상 동시 발생',    desc:'이번 턴 기온 상승 타격이 1.8배 증폭됩니다.', target:'temp', multiply:1.8, type:'bad' },
+  { name:'🧊 북극 메탄 하이드레이트 대분출', desc:'이번 턴 모든 악영향 가중치가 1.5배 폭주합니다.', target:'all', multiply:1.5, type:'bad' },
+  { name:'🌱 글로벌 녹색 보조금 전격 타결',  desc:'이번 턴 생태 복원 정책 효율이 1.4배 향상됩니다.', target:'eco', multiply:1.4, type:'good' },
+];
+function triggerRandomEvent(){
+  const warn = document.getElementById('warn');
+  if(RNG() < 0.28 && G.currentStep > 0 && G.currentStep < TOTAL_STAGES - 1){
+    const rand = MODIFIERS_POOL[Math.floor(RNG()*MODIFIERS_POOL.length)];
+    G.modifier = rand;
+    warn.className = rand.type === 'bad'
+      ? 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-red-950/80 border border-red-700 text-red-300 animate-pulse'
+      : 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-emerald-950/80 border border-emerald-700 text-emerald-300';
+    warn.innerHTML = `🚨 [돌발 속보] ${rand.name}<br/><span class="font-normal text-[11px]">${rand.desc}</span>`;
+  } else {
+    G.modifier = null;
+    warn.className = 'hidden';
+  }
+}
+
+/* ═══════════════ 3. 라이프타임 영구 업적(Achievement) ═══════════════ */
+const ACH_META = {
+  PARIS: { name:'🕊️ 파리 협정의 전설', desc:'평균 기온 상승을 +1.5°C 이하로 완벽히 방어했습니다.' },
+  BOIL:  { name:'🌋 끓어버린 지구',     desc:'기온 폭주로 인류가 강제 조기 종료되었습니다.' },
+  EMPTY: { name:'🍂 침묵의 봄',         desc:'생태계 건강도 0% 도달로 먹이사슬이 전멸했습니다.' },
+  CYBER: { name:'🤖 프랑켄슈타인 테크',  desc:'위험한 지구공학 카드를 남발하여 생존했습니다.' },
+  COLD:  { name:'🥶 냉혈한 최고사령관',  desc:'생태 지표를 25% 미만으로 버려둔 채 문명만 보존했습니다.' },
+  PURIST:{ name:'💚 완벽주의 통제관',    desc:'10단계 전부에서 「최선(20점)」 보기만 골라냈습니다.' },
+  GAMBLER:{ name:'🎲 운명의 도박사',     desc:'확률형 도박 보기를 3번 이상 성공시켰습니다.' },
+};
+function getBadges(){ try{ return JSON.parse(localStorage.getItem('survive2050_achievements')||'[]'); }catch(e){ return []; } }
+function unlockBadge(id){
+  const earned = getBadges();
+  if(earned.includes(id)) return;
+  earned.push(id);
+  try{ localStorage.setItem('survive2050_achievements', JSON.stringify(earned)); }catch(e){}
+  const toast = document.createElement('div');
+  toast.className = 'fixed safe-toast z-[110] glass-main ring-2 ring-amber-400 p-4 rounded-xl shadow-2xl text-white max-w-xs text-left animate-fade-in';
+  toast.innerHTML = `
+    <div class="text-xs font-black text-amber-400">🏆 영구 업적 해금!</div>
+    <div class="font-bold text-sm mt-0.5">${ACH_META[id].name}</div>
+    <div class="text-[11px] text-slate-400 mt-0.5">${ACH_META[id].desc}</div>`;
+  document.body.appendChild(toast);
+  if(soundEnabled) playChordSynth([440,554.37,659.25,880],'sine',0.6,0.06);
+  setTimeout(()=>toast.remove(), 4500);
+}
+
+/* ═══════════════ 4. 계기판 롤링 + 비동기 안전 차단(Interrupt) ═══════════════ */
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function rollNum(elId, start, end, duration=600, isFloat=false){
+  if(G.renderingHalted) return;
+  const el = document.getElementById(elId); if(!el) return;
+  const startTime = performance.now();
+  (function update(now){
+    if(G.renderingHalted) return;
+    const p = Math.min((now-startTime)/duration, 1), ease = 1 - Math.pow(1-p, 3);
+    const cur = start + (end-start)*ease;
+    el.innerText = isFloat ? cur.toFixed(2) : Math.round(cur);
+    if(p < 1){ G.rollTimers.push(requestAnimationFrame(update)); }
+  })(startTime);
+}
+function clearAllRollTimers(){ G.rollTimers.forEach(id=>cancelAnimationFrame(id)); G.rollTimers = []; }
+function updateBars(){
+  const s = G.stats;
+  const bT=document.getElementById('bTemp'), bS=document.getElementById('bSea'), bE=document.getElementById('bEco');
+  if(bT) bT.style.width = clamp((s.temp/4)*100, 4, 100)+'%';
+  if(bS) bS.style.width = clamp((s.sea/120)*100, 2, 100)+'%';
+  if(bE) bE.style.width = clamp(s.eco, 2, 100)+'%';
+}
+
+/* ── 선택 후 수치 변화 토스트(난이도 A·B에서는 숨김 → 정답 역산 방지) ── */
+function showStatToast(dT, dS, dE){
+  if(diffCfg().hideHints) return;
+  const seg = (v, unit, invertGood) => {
+    if(Math.abs(v) < 0.005) return `<span class="text-slate-400">±0${unit}</span>`;
+    const sign = v > 0 ? '+' : '';
+    const good = invertGood ? v < 0 : v > 0;        // eco는 +가 좋음 / temp·sea는 -가 좋음
+    const col = good ? '#34d399' : '#f87171';
+    const val = unit === '°C' ? v.toFixed(2) : Math.round(v);
+    return `<span style="color:${col}">${sign}${val}${unit}</span>`;
+  };
+  const t = document.createElement('div');
+  t.className = 'fixed safe-toast z-[90] glass-main rounded-xl px-4 py-3 text-xs font-extrabold animate-pop shadow-2xl border border-white/10 flex gap-3';
+  t.innerHTML = `<span>🌡️ ${seg(dT,'°C',false)}</span><span>🌊 ${seg(dS,'cm',false)}</span><span>🌱 ${seg(dE,'%',true)}</span>`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2200);
+}
+
+/* ── 분위기 연출: 배경 입자 + 생태계 반영 하늘색 ── */
+function spawnParticles(mode){
+  const wrap = document.getElementById('particles'); if(!wrap) return;
+  wrap.innerHTML='';
+  for(let k=0;k<16;k++){
+    const s = 4 + Math.random()*10, p = document.createElement('span');
+    p.className = 'particle';
+    p.style.left = (Math.random()*100)+'%';
+    p.style.width = s+'px'; p.style.height = s+'px';
+    p.style.animationDuration = (6+Math.random()*8)+'s';
+    p.style.animationDelay = (-Math.random()*8)+'s';
+    p.style.background = mode==='smog' ? 'rgba(140,130,120,.30)'
+                       : mode==='eco'  ? 'rgba(160,230,200,.30)'
+                                       : 'rgba(120,170,220,.28)';
+    wrap.appendChild(p);
+  }
+}
+function setSky(top, mid, bot){
+  const r = document.documentElement.style;
+  r.setProperty('--sky-top', top); r.setProperty('--sky-mid', mid); r.setProperty('--sky-bot', bot);
+}
+function updateSky(){
+  const e = G ? G.stats.eco : START.eco;
+  if(e >= 66){ setSky('#0e7490','#0f766e','#14532d'); spawnParticles('eco'); }
+  else if(e >= 33){ setSky('#0b2545','#13315c','#1d3461'); spawnParticles('cool'); }
+  else { setSky('#3b2f2f','#4a3b2a','#5b3a29'); spawnParticles('smog'); }
+}
+
+/* ═══════════════ 5. 큐 생성 + 선택 처리 ═══════════════ */
+function sample(arr, n){
+  const pool = arr.slice();
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(RNG()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool.slice(0, Math.min(n, pool.length));
+}
+function shuffleInPlace(arr){
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(RNG()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+function buildQueue(){
+  const q = [];
+  QUEUE_PLAN.forEach(({group,pick,tier})=>{
+    const pool = SCENARIOS[group] || [];
+    sample(pool, pick).forEach(scene=>{
+      // 3개 기본 보기 + 진짜 4번째 보기(EXTRA_CHOICES, 전 모드 공통) 합류
+      let base = scene.choices.slice();
+      const extra = (window.EXTRA_CHOICES || {})[scene.title];
+      if(extra) base.push(extra);
+      // 매 판 선택지 순서를 무작위 셔플(정답이 항상 같은 자리에 고정되던 문제 해결)
+      const choices = shuffleInPlace(base);
+      q.push({ group, tier, scene:{ title:scene.title, text:scene.text, art:scene.art, voice:scene.voice, choices } });
+    });
+  });
+  G.gameQueue = q; // early→mid→late→final 순(점진적 난이도)
+}
+function weightFor(step){ return 1 + step * 0.1; }   // 1단계 ×1.0 → 10단계 ×1.9
+
+/* ── [시스템] 티핑포인트 비선형 결합: 생태계가 낮을수록 기온 피해 증폭(영구 상태결합) ── */
+function ecoTempPenalty(){ const e = G.stats.eco; return e<40 ? 1.4 : e<60 ? 1.15 : 1; }
+
+/* ── [내러티브] 상태 인지형 콜백: 과거 플래그 × 현재 SDG가 맞물리면 한 줄 회상 ── */
+function narrativeEcho(c){
+  if(!G || !G.flags) return '';
+  for(const e of (window.ECHOES||[])) if(G.flags.has(e.needFlag) && c.fx.sdg===e.whenSdg) return e.text;
+  return '';
+}
+
+/* ── [시스템] 지연 청구서: 이번 단계가 만기인 과거 선택의 효과를 raw로 정산 ── */
+function flushDeferredDue(){
+  if(!G.pending || !G.pending.length) return '';
+  let msg = '';
+  G.pending = G.pending.filter(p=>{
+    if(p.due === G.currentStep){
+      if(p.fx){ G.stats.temp = Math.max(0.80, G.stats.temp + (p.fx.temp||0));
+                G.stats.sea  = G.stats.sea + (p.fx.sea||0);
+                G.stats.eco  = clamp(G.stats.eco + (p.fx.eco||0), 0, 100); }
+      msg = p.msg || '⏰ 과거의 선택이 청구서가 되어 돌아왔다.';
+      return false;
+    }
+    return true;
+  });
+  return msg;
+}
+
+/* ── [UX] 기온 기반 전역 색온도 드리프트(더워질수록 화면이 붉어짐) ── */
+function updateHeat(){
+  const layer = document.getElementById('heatLayer'); if(!layer) return;
+  const t = (G && G.stats) ? G.stats.temp : START.temp;
+  layer.style.opacity = clamp((t - 1.1) / 2.4, 0, 0.6).toFixed(3);
+}
+
+let locking = false;
+function choose(choiceIdx){
+  if(G.renderingHalted || locking) return;
+  clearChoiceTimer();                          // 시간압박 링 타이머 해제
+  const item = G.gameQueue[G.currentStep];
+  const scene = item.scene;
+  const visible = visibleChoices(scene, item.tier);   // 숨은 보기 필터 후의 실제 목록
+  const c = visible[choiceIdx];
+  if(!c) { return; }
+
+  // 「예산/정치」 자원 게이트: 비용 차감(부족 시엔 가장 싼 보기만 강제 허용)
+  if(diffCfg().budget){
+    const costs = visible.map(ch=>costOf(ch, item.tier));
+    const cheapest = costs.indexOf(Math.min(...costs));
+    const cost = costs[choiceIdx];
+    if(cost > G.budget && choiceIdx !== cheapest) return;   // 못 사는 보기는 무시
+    // 음수 비용(환경 포기) = 자금 확보 → 예산이 다시 차오름(상한=총예산)
+    G.budget = clamp(G.budget - cost, 0, G.budgetTotal || G.budget - cost);
+  }
+
+  locking = true;
+  const old = { ...G.stats };
+
+  // ── 효과 파이프라인 ─────────────────────────────────────────
+  // 1) 지연 청구서 정산(과거 선택이 지금 터진다)
+  const billMsg = flushDeferredDue();
+
+  // 2) 확률형 보기(도박) — fx를 복제해 굴린다(점수는 불변)
+  let fx = { temp:c.fx.temp, sea:c.fx.sea, eco:c.fx.eco };
+  let rolledNote = '';
+  if(c.gamble){
+    const hit = RNG() < c.gamble.p;
+    const g = hit ? c.gamble.win : c.gamble.lose;
+    fx.temp += g.temp||0; fx.sea += g.sea||0; fx.eco += g.eco||0;
+    rolledNote = (hit?'🎲 성공 — ':'🎲 실패 — ') + (g.note||'');
+    if(hit) G.gambleWins = (G.gambleWins||0) + 1;
+  }
+
+  // 3) 돌발 기후 변수 가중치
+  const stepWeight = weightFor(G.currentStep);
+  let modWeight = 1.0;
+  if(G.modifier){
+    if(G.modifier.target === 'all') modWeight = G.modifier.multiply;
+    else if(G.modifier.target === 'temp' && fx.temp > 0) modWeight = G.modifier.multiply;
+    else if(G.modifier.target === 'eco'){
+      if((G.modifier.type==='bad' && fx.eco < 0) || (G.modifier.type==='good' && fx.eco > 0)) modWeight = G.modifier.multiply;
+    }
+  }
+
+  // 4) 티핑포인트 결합 + 지표 반영
+  const tempDelta = (fx.temp>0 ? fx.temp*ecoTempPenalty() : fx.temp) * stepWeight * modWeight;
+  let nextTemp = G.stats.temp + tempDelta;
+  if(nextTemp < 0.80) nextTemp = 0.80;
+  G.stats.temp = nextTemp;
+  G.stats.sea  = G.stats.sea + (fx.sea * stepWeight);
+  G.stats.eco  = clamp(G.stats.eco + (fx.eco * stepWeight * modWeight), 0, 100);
+  G.stats.score += c.fx.score;
+
+  // 5) 회상 계산(플래그 추가 전) → 6) 플래그 적립 → 7) 지연 예약
+  c._echo = narrativeEcho(c);
+  c._rolled = rolledNote;
+  if(c.flag){ G.flags = G.flags || new Set(); G.flags.add(c.flag); }
+  if(c.delay){ G.pending = G.pending || []; G.pending.push({ due:G.currentStep + (c.delay.after||1), fx:c.delay.fx, msg:c.delay.msg }); }
+
+  G.history.push({
+    step:G.currentStep, tier:item.tier, title:scene.title, choice:c.label, tag:c.tag,
+    sdg:c.fx.sdg, baseScore:c.fx.score, feedback:c.feedback, fact:c.fact, flag:c.flag||null,
+  });
+
+  // 계기판 반영 + 수치 변화 토스트(난이도 A·B 숨김)
+  rollNum('vTemp', old.temp, G.stats.temp, 500, true);
+  rollNum('vSea',  old.sea,  G.stats.sea,  500, false);
+  rollNum('vEco',  old.eco,  G.stats.eco,  500, false);
+  updateBars(); updateHeat();
+  showStatToast(G.stats.temp - old.temp, G.stats.sea - old.sea, G.stats.eco - old.eco);
+  if(billMsg) deferredToast(billMsg);
+  if(Math.floor(old.eco/33) !== Math.floor(G.stats.eco/33)) updateSky();
+
+  // 임계점 도달 시 화면 붕괴 연출
+  const root = document.getElementById('app-root');
+  if(G.stats.eco < 35 || G.stats.temp >= 3.40) root.classList.add('earthquake','glitch-red');
+  else root.classList.remove('earthquake','glitch-red');
+
+  // 효과음
+  if(soundEnabled){
+    if(c.fx.score >= 20) playChordSynth([659.25,783.99,987.77],'sine',0.25,0.05);
+    else if(c.fx.score <= 6) playChordSynth([220,174.61],'sawtooth',0.3,0.04);
+    else playChordSynth([523.25],'triangle',0.18,0.04);
+  }
+
+  // 조기 강제 붕괴 검증(난이도별 임계 기온 적용 · B는 3.0°C)
+  const d = diffCfg();
+  if(G.stats.eco <= 0 || G.stats.temp >= d.suddenTemp){
+    if(G.stats.eco <= 0) executeSuddenDeath('EMPTY');
+    else executeSuddenDeath('BOIL');
+    locking = false;
+    return;
+  }
+
+  G.currentStep++;
+  saveGame();
+
+  if(G.currentStep >= TOTAL_STAGES){
+    const result = getEnding(G.stats.score / MAX_SCORE);
+    clearSave();
+    renderEndingCard(result);
+  } else {
+    renderFeedbackPage(c);
+  }
+  locking = false;
+}
+
+/* ── 지연 청구서 알림(붉은 배너 토스트) ── */
+function deferredToast(msg){
+  const t = document.createElement('div');
+  t.className = 'fixed left-1/2 -translate-x-1/2 z-[95] max-w-xs text-center glass-main rounded-xl px-4 py-2.5 text-[11px] font-bold text-red-200 border border-red-600/50 animate-pop shadow-2xl';
+  t.style.top = 'calc(84px + var(--safe-top))';
+  t.innerHTML = '⏰ <b>과거의 청구서</b><br/><span class="font-normal text-red-300">'+msg+'</span>';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3600);
+}
+
+/* ═══════════════ 6. 엔딩 등급 매트릭스 + 조기 강제 붕괴 ═══════════════ */
+function executeSuddenDeath(reasonType){
+  G.renderingHalted = true;
+  clearAllRollTimers();
+  clearChoiceTimer();
+  clearSave();
+  unlockBadge(reasonType);
+  unlockEnding(reasonType);   // 도감: BOIL / EMPTY 적립
+  if(soundEnabled) playChordSynth([146.83,110,82.41],'sawtooth',1.2,0.05);
+
+  let title, desc;
+  if(reasonType === 'EMPTY'){
+    title = '🪦 배드 엔딩: 텅 빈 세계';
+    desc  = '생태계 건강 지표가 결국 0%를 뚫고 파산했습니다. 벌과 미생물이 사라져 수정이 불가능해졌고 모든 식생이 고사했습니다. 인류는 지하 벙커에서 영양 배양액으로 연명하는 혹독한 디스토피아를 마주합니다.';
+  } else {
+    title = '🪦 배드 엔딩: 끓어버린 지구';
+    desc  = `평균 기온 상승이 마지노선인 +${diffCfg().suddenTemp.toFixed(1)}°C를 넘어서며 시베리아 영구동토층이 완전히 뒤집혔습니다. 기후 제어 능력을 상실한 지구는 방호복 없이 한 걸음도 걸을 수 없는 거대한 용광로가 되었습니다.`;
+  }
+  renderEndingCard({ grade:'F', title, desc, color:'#ef4444', collapse:true });
+}
+
+/* ── [라이브옵스] 시너지 콤보 평가: 한 판의 선택 패턴으로 영구 업적 해금 ── */
+function evaluateCombos(){
+  const h = G.history || [];
+  const allTop = h.length===TOTAL_STAGES && h.every(x=>x.baseScore>=20);
+  if(allTop) unlockBadge('PURIST');                 // 전 단계 최선(20점)만
+  if((G.gambleWins||0) >= 3) unlockBadge('GAMBLER'); // 도박 보기 3회 이상 성공
+}
+
+/* 데이터 기반 엔딩(ENDING_RULES) 테이블만 순회 — 분기 로직 0.
+   ctx = { s, ratio, top, aCut, survive, cCut, geoCount, flags } */
+function getEnding(ratio){
+  const s = G.stats, d = diffCfg();
+  const flags = G.flags || new Set();
+  const geoCount = (G.history.filter(h=> h.flag==='geo').length)
+                 + (G.history.filter(h=> h.tag && h.tag.includes('지구공학')).length);
+  const ctx = {
+    s, ratio, geoCount, flags,
+    top:     d.topCut,
+    aCut:    Math.max(d.topCut - 0.12, 0.5),
+    survive: d.surviveCut,
+    cCut:    Math.max(d.surviveCut - 0.20, 0.2),
+  };
+  evaluateCombos();
+  const rules = window.ENDING_RULES || [];
+  for(const r of rules){
+    if(r.when(ctx)){
+      if(r.badge) unlockBadge(r.badge);
+      const e = r.make(ctx);
+      unlockEnding(r.id);
+      return e;
+    }
+  }
+  // 안전 폴백(테이블이 비정상일 때)
+  unlockEnding('DARK');
+  return { grade:'D', color:'#78350f', title:'🌪️ 각자도생의 뉴 다크에이지',
+    desc:'국제 공조가 파탄 나고 식량 부족으로 인한 기후 난민이 수억 명에 달합니다.' };
+}
+
+/* ── 엔딩 도감 적립(localStorage) ── */
+function getEndingDex(){ try{ return JSON.parse(localStorage.getItem('survive2050_endings')||'[]'); }catch(e){ return []; } }
+function unlockEnding(id){
+  const seen = getEndingDex();
+  if(seen.includes(id)) return;
+  seen.push(id);
+  try{ localStorage.setItem('survive2050_endings', JSON.stringify(seen)); }catch(e){}
+}
+
+/* ═══════════════ 7. 화면 렌더 ═══════════════ */
+/* 숨은보기 필터: 조건을 충족한 보기만 노출(렌더·선택 인덱스가 항상 동일하도록 공통 사용) */
+function visibleChoices(scene){
+  return scene.choices.filter(c=>{
+    if(c.secret){
+      const r = c.req || {};
+      if(r.ecoMin!=null && (!G || G.stats.eco < r.ecoMin)) return false;
+      if(r.scoreMin!=null && (!G || G.stats.score < r.scoreMin)) return false;
+      if(r.flag && !(G && G.flags && G.flags.has(r.flag))) return false;
+    }
+    return true;
+  });
+}
+function clearChoiceTimer(){ if(G && G.choiceTimer){ clearTimeout(G.choiceTimer); G.choiceTimer=null; } }
+
+/* [UX] 커밋 연출: 누른 보기는 강조, 나머지는 접고 → 잠깐 뒤 choose() */
+function pickChoice(btn, idx){
+  if(G.renderingHalted || locking) return;
+  clearChoiceTimer();
+  const wrap = btn && btn.parentElement;
+  if(wrap){
+    Array.from(wrap.children).forEach(b=>{
+      if(b===btn){ b.classList.add('committed'); }
+      else { b.style.transition='all .35s ease'; b.style.opacity='0.22'; b.style.transform='scale(0.97)'; b.style.pointerEvents='none'; }
+    });
+  }
+  if(soundEnabled) playChordSynth([392,523.25],'sine',0.12,0.04);
+  setTimeout(()=>choose(idx), 360);
+}
+
+/* [UX] 타이핑 효과(완료 콜백 지원) */
+function typeIn(el, text, speed, done){
+  if(!el){ if(done) done(); return; }
+  el.textContent=''; let i=0;
+  (function t(){
+    if(G && G.renderingHalted) return;
+    el.textContent = text.slice(0, i++);
+    if(i<=text.length){ setTimeout(t, speed); } else if(done){ done(); }
+  })();
+}
+/* [UX] 선택지 스태거 등장(읽기 전 클릭 방지 → 순차 활성화) */
+function revealChoices(){
+  document.querySelectorAll('.choice-btn').forEach((b,i)=>{
+    setTimeout(()=>{ b.style.transition='opacity .4s ease, transform .4s ease';
+      b.style.opacity = b.classList.contains('cursor-not-allowed') ? '0.4' : '1'; }, 100 + i*300);
+  });
+}
+/* [UX] 시간압박 카운트다운(하드코어): 0 도달 시 최저점 보기 강제 집행 */
+function startChoiceTimer(choices){
+  let remain = 10;
+  const ring = document.getElementById('choiceRing'), num = document.getElementById('choiceRingNum');
+  const tick = ()=>{
+    if(G.renderingHalted || locking) return;
+    remain--;
+    if(num) num.textContent = Math.max(0, remain);
+    if(ring){ ring.style.setProperty('--p', ((10-remain)/10*100)+'%'); if(remain<=3) ring.classList.add('danger'); }
+    if(remain<=0){
+      let worst=0, lo=Infinity;
+      choices.forEach((c,i)=>{ if(c.fx.score<lo){ lo=c.fx.score; worst=i; } });
+      miniToast('⏱️ 시간 초과 — 최악의 선택이 강제 집행됩니다');
+      choose(worst); return;
+    }
+    G.choiceTimer = setTimeout(tick, 1000);
+  };
+  G.choiceTimer = setTimeout(tick, 1000);
+}
+
+function renderCurrentScenario(){
+  if(G.renderingHalted) return;
+  clearChoiceTimer();
+  const stage = document.getElementById('stage');
+  const item = G.gameQueue[G.currentStep];
+  const scene = item.scene;
+  const hide = diffCfg().hideHints;
+  const budgetMode = diffCfg().budget;
+  const theme = resTheme();
+  const choices = visibleChoices(scene);
+
+  // 자원 모드: 보기별 순비용(net, 음수=환급) + 최저비용(항상 선택 가능) 산출
+  const costs = budgetMode ? choices.map(c=>costOf(c, item.tier)) : null;
+  const cheapest = budgetMode ? costs.indexOf(Math.min(...costs)) : -1;
+
+  const choicesHTML = choices.map((c, idx)=>{
+    const meta = SDG[c.fx.sdg] || { name:'SDGs', color:'#64748b' };
+    const L = String.fromCharCode(65+idx);
+    const isSecret = !!c.secret;
+
+    // 우측 뱃지: 자원 모드=순비용(환급은 +초록) / 기본(힌트 표시 시)=SDG
+    let rightBadge = '';
+    if(budgetMode){
+      const cost = costs[idx];
+      if(cost <= 0){
+        rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0 bg-emerald-400/15 text-emerald-300 border border-emerald-400/30">${theme.emoji} +${Math.abs(cost)}${theme.unit} 회복</span>`;
+      } else {
+        const afford = cost <= G.budget || idx === cheapest;
+        rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0 ${afford?'bg-amber-400/15 text-amber-300 border border-amber-400/30':'bg-red-500/15 text-red-300 border border-red-500/30'}">${theme.emoji} ${cost}${theme.unit}</span>`;
+      }
+    } else if(!hide){
+      rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0" style="background:${meta.color}22;color:${meta.color};border:1px solid ${meta.color}55">SDG ${c.fx.sdg}</span>`;
+    }
+
+    const headLeft = (hide || budgetMode)
+      ? `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">[선택 ${L}]${isSecret?' · 🔒 숨겨진 길':''}</div>`
+      : `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">[선택 ${L}] ${c.tag}</div>`;
+    const head = `<div class="flex items-center justify-between gap-2 mb-0.5">${headLeft}${rightBadge}</div>`;
+
+    const afford = !budgetMode || costs[idx] <= G.budget || idx === cheapest;
+    const baseCls = isSecret
+      ? 'w-full text-left p-3.5 rounded-xl bg-amber-400/10 border border-amber-400/50 hover:bg-amber-400/20 text-sm font-medium transition active:scale-[0.99] text-amber-100 shadow-[0_0_18px_-6px_rgba(251,191,36,.7)]'
+      : 'w-full text-left p-3.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-emerald-400/40 text-sm font-medium transition active:scale-[0.99] text-slate-200';
+    const cls = afford ? baseCls
+      : 'w-full text-left p-3.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-slate-500 opacity-40 cursor-not-allowed';
+    const onclick = afford ? `onclick="pickChoice(this, ${idx})"` : 'disabled';
+    return `
+      <button ${onclick} class="choice-btn ${cls}" style="opacity:0">
+        ${head}
+        ${c.label}${afford?'':` <span class="text-[10px] text-red-300">· ${theme.name} 부족</span>`}
+      </button>`;
+  }).join('');
+
+  // 자원 현황 배너(예산/정치자본)
+  let budgetBar = '';
+  if(budgetMode){
+    const pct = clamp(G.budget / Math.max(1,G.budgetTotal) * 100, 0, 100);
+    budgetBar = `
+      <div class="mb-3 rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5">
+        <div class="flex justify-between text-[11px] font-bold text-amber-200 mb-1"><span>${theme.emoji} 남은 ${theme.name}</span><span>${G.budget}${theme.unit} / ${G.budgetTotal}${theme.unit}</span></div>
+        <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+
+  const ringHTML = (currentDiff==='B')
+    ? `<div id="choiceRing" class="choice-ring"><span id="choiceRingNum">10</span></div>` : '';
+  const voiceHTML = scene.voice
+    ? `<p class="text-[11px] italic text-amber-200/80 mb-2 pl-2 border-l-2 border-amber-400/40">${scene.voice}</p>` : '';
+
+  // 진행 세그먼트
+  let seg = '';
+  for(let k=0;k<TOTAL_STAGES;k++) seg += `<span class="h-1.5 rounded-full ${k<G.currentStep?'bg-emerald-400':(k===G.currentStep?'bg-white/60':'bg-white/15')}" style="width:${100/TOTAL_STAGES-1.5}%"></span>`;
+
+  stage.innerHTML = `
+    <div class="glass-main p-5 rounded-2xl shadow-xl animate-fade-in relative">
+      ${ringHTML}
+      ${sceneArtHTML(scene)}
+      <div class="flex items-center gap-1 mb-3">${seg}</div>
+      <div class="flex justify-between text-xs text-slate-400 font-bold mb-2">
+        <span>📋 통제 단계: ${G.currentStep+1} / ${TOTAL_STAGES}</span>
+        <span class="text-red-400">위기 등급: TIER ${item.tier}</span>
+      </div>
+      <h2 class="text-lg font-black text-white mb-2">${scene.title}</h2>
+      ${voiceHTML}
+      <p id="sceneText" class="text-xs text-slate-300 leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5 mb-4 min-h-[3.5rem]"></p>
+      ${budgetBar}
+      <div class="space-y-2">${choicesHTML}</div>
+    </div>`;
+
+  updateHeat();
+  // 타이핑 연출 → 끝나면 선택지 스태거 등장 + (하드코어) 시간압박 가동
+  typeIn(document.getElementById('sceneText'), scene.text, 16, ()=>{
+    revealChoices();
+    if(currentDiff==='B') startChoiceTimer(choices);
+  });
+}
+
+function renderFeedbackPage(choice){
+  const stage = document.getElementById('stage');
+  const meta = SDG[choice.fx.sdg] || { name:'지속가능개발목표', color:'#64748b' };
+  const rolledHTML = choice._rolled
+    ? `<div class="mb-4 rounded-xl border ${choice._rolled.includes('성공')?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200':'border-red-500/40 bg-red-500/10 text-red-200'} p-2.5 text-xs font-bold">${choice._rolled}</div>` : '';
+  const echoHTML = choice._echo
+    ? `<div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-medium text-amber-200 text-left">${choice._echo}</div>` : '';
+  stage.innerHTML = `
+    <div class="glass-main p-6 rounded-2xl text-center shadow-xl animate-fade-in">
+      <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">정책 시행 결과</div>
+      <h3 class="text-xl font-black text-white mb-4">"${choice.tag}"</h3>
+      <p class="text-sm text-slate-300 leading-relaxed mb-5">${choice.feedback}</p>
+      ${rolledHTML}
+      ${echoHTML}
+      <a href="${meta.url||'#'}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white mb-4" style="background:${meta.color}">
+        🌐 SDG ${choice.fx.sdg}: ${meta.name} ↗
+      </a>
+      <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 text-left mb-6 text-slate-300 text-[11px] leading-relaxed">
+        <strong class="text-amber-400 block mb-0.5">💡 과학적 팩트 체크</strong>
+        ${choice.fact}
+      </div>
+      <button id="nextBtn" class="w-full rounded-full bg-white text-slate-950 font-black py-3 active:scale-95 transition shadow-lg text-sm">
+        다음 위기 보고서 접수 ➡️
+      </button>
+    </div>`;
+  document.getElementById('nextBtn').onclick = ()=>{
+    if(soundEnabled) playChordSynth([587.33,783.99],'sine',0.15,0.04);
+    triggerRandomEvent();
+    renderCurrentScenario();
+  };
+}
+
+/* ═══════════════ 8. 인스타 스토리 공유용 카드뉴스 엔딩(9:16) ═══════════════ */
+function renderEndingCard(result){
+  if(G) G.renderingHalted = result.collapse ? true : G.renderingHalted;
+  document.getElementById('warn').className = 'hidden';
+  const root = document.getElementById('app-root');
+  root.classList.remove('earthquake','glitch-red');
+  root.style.display = 'none';   // 게임 화면을 완전히 숨겨 마지막 선택이 비쳐 보이지 않게
+  setSky(result.color, result.color+'55', '#05060e');
+  spawnParticles((G && G.stats && G.stats.eco < 33) ? 'smog' : 'eco');
+
+  const s = (G && G.stats) ? G.stats : freshStats();
+  const hist = (G && G.history) ? G.history : [];
+  const scorePct = Math.round((s.score / MAX_SCORE) * 100);
+  const d = diffCfg();
+  LAST_ENDING = { result, s:{ ...s }, scorePct, history: hist.map(h=>({ sdg:h.sdg, step:h.step, choice:h.choice, baseScore:h.baseScore })) };
+
+  // SDGs 엔딩 성적표(난이도와 무관하게 항상 SDG 뱃지 노출)
+  let report = hist.map(l=>{
+    const m = SDG[l.sdg] || { name:'SDGs', color:'#64748b', url:'#' };
+    const mark = l.baseScore>=20 ? '🟢' : (l.baseScore>=10 ? '🟡' : '🔴');
+    return `
+      <div class="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+        <div class="shrink-0 grid place-items-center rounded-md font-black text-white text-[9px]" style="width:30px;height:30px;background:${m.color}">${l.sdg}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[11px] font-bold truncate text-slate-100">${l.choice}</div>
+          <div class="text-[9px] text-slate-400 truncate">${l.step+1}단계 · ${m.name}</div>
+        </div>
+        <div class="shrink-0 text-sm">${mark}</div>
+      </div>`;
+  }).join('');
+  if(!report) report = '<div class="text-center text-[11px] text-slate-400 py-3">조기 종료로 기록이 부족합니다.</div>';
+
+  const chip = (icon,label,val,col)=>`
+    <div class="rounded-xl bg-white/5 border border-white/5 p-2.5 text-left">
+      <div class="text-[10px] text-slate-400">${icon} ${label}</div>
+      <div class="font-extrabold text-base leading-none mt-0.5" style="color:${col}">${val}</div>
+    </div>`;
+
+  const color = result.color;
+  const ov = document.getElementById('endingOverlay');
+  ov.innerHTML = `
+    <div class="w-full h-[100dvh] overflow-y-auto flex justify-center"
+         style="background: radial-gradient(120% 80% at 50% 0%, ${color}26, transparent 55%), #05060e; padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bot));">
+      <div id="shareCard" class="relative w-full max-w-[400px] my-auto flex flex-col rounded-[28px] overflow-hidden animate-pop"
+           style="aspect-ratio:9/16; max-height: calc(100dvh - 24px); background:linear-gradient(180deg, #0b1020 0%, ${color}1f 52%, #05060e 100%); border:1px solid ${color}55; box-shadow:0 30px 80px -20px ${color}66, inset 0 0 90px -45px ${color};">
+
+        <div class="px-5 pt-5 pb-1 text-center shrink-0">
+          <div class="font-tech text-[10px] tracking-[0.32em] text-slate-300">SURVIVE 2050 · FINAL REPORT</div>
+          <div class="mt-1 text-[10px] text-slate-400">난이도 ${d.emoji} ${d.label}</div>
+        </div>
+
+        <div class="flex flex-col items-center px-5 pt-1 shrink-0">
+          <div class="grid place-items-center rounded-full font-tech font-black"
+               style="width:92px;height:92px;color:#05060e;background:${color};box-shadow:0 0 42px ${color}aa;font-size:46px;">${result.grade}</div>
+          <div class="mt-1.5 text-[11px] font-bold tracking-wider" style="color:${color}">최종 등급</div>
+          <h2 class="mt-1.5 text-lg font-black text-white text-center leading-tight px-2">${result.title}</h2>
+        </div>
+
+        <div class="px-5 pt-2 shrink-0">
+          <p class="text-[11px] leading-relaxed text-slate-300 text-center bg-black/30 rounded-xl p-3 border border-white/5">${result.desc}</p>
+        </div>
+
+        <div class="px-5 pt-3 grid grid-cols-2 gap-2 shrink-0">
+          ${chip('🌡️','평균 기온', '+'+s.temp.toFixed(2)+'°C', '#f87171')}
+          ${chip('🌊','글로벌 해수면', '+'+Math.round(s.sea)+'cm', '#22d3ee')}
+          ${chip('🌱','대자연 생태', Math.round(s.eco)+'%', '#34d399')}
+          ${chip('🏆','지속가능성', scorePct+'% · '+s.score+'점', '#fbbf24')}
+        </div>
+        ${(d.budget && G) ? `<div class="px-5 pt-2 shrink-0"><div class="rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5 text-center text-[11px] font-bold text-amber-200">${resTheme().emoji} 남은 ${resTheme().name} ${G.budget}${resTheme().unit} / ${G.budgetTotal}${resTheme().unit}</div></div>` : ''}
+
+        <div class="px-5 pt-3 pb-1 flex-1 min-h-0 flex flex-col">
+          <div class="text-[11px] font-bold text-slate-300 mb-1.5 shrink-0">🎓 SDGs 엔딩 성적표</div>
+          <div class="space-y-1.5 overflow-y-auto pr-1">${report}</div>
+        </div>
+
+        <div class="px-5 pb-5 pt-2 shrink-0">
+          <div class="text-center text-[10px] text-slate-400 mb-2">#순천대 #SDGs #지구통제실 #2050지구생존</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="shareResult()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">📸 스토리 카드 공유</button>
+            <button onclick="restartGame()" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">🔄 다시 도전</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  ov.classList.remove('hidden');
+
+  if(soundEnabled){
+    if(result.grade === 'F') playChordSynth([146.83,110,82.41],'sawtooth',1.0,0.05);
+    else if(result.grade === 'S' || result.grade === 'A') playChordSynth([523.25,659.25,783.99,1046.5],'sine',0.8,0.05);
+    else playChordSynth([392,523.25],'triangle',0.6,0.04);
+  }
+}
+
+function miniToast(msg){
+  const t = document.createElement('div');
+  t.className = 'fixed left-1/2 -translate-x-1/2 z-[120] glass-main rounded-full px-4 py-2 text-xs font-bold text-white animate-pop shadow-2xl border border-white/10';
+  t.style.bottom = 'calc(22px + var(--safe-bot))';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2800);
+}
+/* ── 색상 유틸(카드 이미지 렌더용) ── */
+function hx(h){ h=h.replace('#',''); return [parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]; }
+function hexA(hex,a){ const [r,g,b]=hx(hex); return `rgba(${r},${g},${b},${a})`; }
+function mix(h1,h2,t){ const a=hx(h1),b=hx(h2); return `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`; }
+function lum(hex){ const [r,g,b]=hx(hex); return (0.299*r+0.587*g+0.114*b)/255; }
+function rrect(ctx,x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function wrapChars(ctx,text,maxW,maxLines){
+  const lines=[]; let line='';
+  for(const ch of String(text)){
+    const test = line+ch;
+    if(ctx.measureText(test).width>maxW && line){ lines.push(line); line=ch; if(maxLines && lines.length>=maxLines) break; }
+    else line=test;
+  }
+  if(line && (!maxLines || lines.length<maxLines)) lines.push(line);
+  if(maxLines && lines.length>maxLines) lines.length=maxLines;
+  return lines;
+}
+
+/* ── 인스타 스토리용 9:16 카드뉴스 이미지(1080×1920 PNG) 직접 렌더 ── */
+async function buildShareBlob(){
+  if(!LAST_ENDING) return null;
+  try{ if(document.fonts && document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const { result, s, scorePct, history } = LAST_ENDING;
+  const color = result.color, F='"Noto Sans KR", sans-serif';
+  const W=1080, H=1920, cx=W/2, padX=72, panelW=W-2*padX;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+
+  // 배경(불투명) + 상단 후광 + 테두리
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0b1020'); bg.addColorStop(0.5,mix(color,'#05060e',0.82)); bg.addColorStop(1,'#05060e');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  const rg=ctx.createRadialGradient(cx,-120,40,cx,-120,920);
+  rg.addColorStop(0,hexA(color,0.32)); rg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,760);
+  ctx.strokeStyle=hexA(color,0.45); ctx.lineWidth=6; rrect(ctx,12,12,W-24,H-24,44); ctx.stroke();
+
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  let y=128;
+  ctx.fillStyle='#cbd5e1'; ctx.font='700 30px '+F; ctx.fillText('SURVIVE 2050 · FINAL REPORT', cx, y); y+=46;
+  ctx.fillStyle='#94a3b8'; ctx.font='600 26px '+F; ctx.fillText('난이도 '+diffCfg().emoji+' '+diffCfg().label, cx, y); y+=64;
+
+  // 등급 원형 배지
+  const r=88, ccy=y+r;
+  ctx.beginPath(); ctx.arc(cx,ccy,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+  ctx.fillStyle = lum(color)<0.55 ? '#ffffff' : '#05060e';
+  ctx.font='900 104px '+F; ctx.textBaseline='middle'; ctx.fillText(result.grade, cx, ccy+6); ctx.textBaseline='alphabetic';
+  y=ccy+r+50;
+  ctx.fillStyle=color; ctx.font='700 26px '+F; ctx.fillText('최종 등급', cx, y); y+=54;
+
+  // 엔딩 타이틀(최대 2줄)
+  ctx.fillStyle='#ffffff'; ctx.font='900 48px '+F;
+  wrapChars(ctx, result.title, W-220, 2).forEach(line=>{ ctx.fillText(line, cx, y); y+=60; });
+  y+=12;
+
+  // 설명 패널(최대 6줄)
+  ctx.font='400 30px '+F;
+  const dlines=wrapChars(ctx, result.desc, panelW-72, 6);
+  const lineH=42, panelH=dlines.length*lineH+52;
+  ctx.fillStyle='rgba(0,0,0,0.30)'; rrect(ctx,padX,y,panelW,panelH,28); ctx.fill();
+  ctx.fillStyle='#cbd5e1'; let ty=y+46; dlines.forEach(line=>{ ctx.fillText(line, cx, ty); ty+=lineH; });
+  y+=panelH+30;
+
+  // 지표 칩 2×2
+  const chips=[ ['🌡️ 평균 기온','+'+s.temp.toFixed(2)+'°C','#f87171'],
+               ['🌊 글로벌 해수면','+'+Math.round(s.sea)+'cm','#22d3ee'],
+               ['🌱 대자연 생태', Math.round(s.eco)+'%','#34d399'],
+               ['🏆 지속가능성', scorePct+'% · '+s.score+'점','#fbbf24'] ];
+  const gap=20, cw=(panelW-gap)/2, chH=112;
+  ctx.textAlign='left';
+  chips.forEach((c,i)=>{
+    const x=padX+(i%2)*(cw+gap), yy=y+Math.floor(i/2)*(chH+gap);
+    ctx.fillStyle='rgba(255,255,255,0.06)'; rrect(ctx,x,yy,cw,chH,22); ctx.fill();
+    ctx.fillStyle='#94a3b8'; ctx.font='600 25px '+F; ctx.fillText(c[0], x+26, yy+44);
+    ctx.fillStyle=c[2];     ctx.font='800 42px '+F; ctx.fillText(c[1], x+26, yy+92);
+  });
+  y+=2*chH+gap+38;
+
+  // SDGs 엔딩 성적표
+  ctx.fillStyle='#e2e8f0'; ctx.font='700 28px '+F; ctx.fillText('🎓 SDGs 엔딩 성적표', padX, y); y+=40;
+  const rows=(history||[]).slice(0,10), rowH=52;
+  rows.forEach(l=>{
+    const m=SDG[l.sdg]||{name:'SDGs',color:'#64748b'};
+    const mark=l.baseScore>=20?'🟢':(l.baseScore>=10?'🟡':'🔴');
+    ctx.fillStyle='rgba(255,255,255,0.05)'; rrect(ctx,padX,y,panelW,rowH-8,16); ctx.fill();
+    ctx.fillStyle=m.color; rrect(ctx,padX+12,y+6,32,32,8); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='800 19px '+F; ctx.textAlign='center'; ctx.fillText(String(l.sdg), padX+28, y+28); ctx.textAlign='left';
+    ctx.fillStyle='#e2e8f0'; ctx.font='700 25px '+F;
+    let full=(l.step+1)+'단계 · '+l.choice, txt=full;
+    if(ctx.measureText(txt).width>panelW-150){ while(ctx.measureText(txt+'…').width>panelW-150 && txt.length>4) txt=txt.slice(0,-1); txt+='…'; }
+    ctx.fillText(txt, padX+58, y+32);
+    ctx.textAlign='right'; ctx.font='26px '+F; ctx.fillStyle='#fff'; ctx.fillText(mark, padX+panelW-16, y+32); ctx.textAlign='left';
+    y+=rowH;
+  });
+  if(!rows.length){ ctx.fillStyle='#94a3b8'; ctx.font='400 26px '+F; ctx.fillText('조기 종료로 기록이 부족합니다.', padX, y+30); }
+
+  // 푸터 해시태그
+  ctx.textAlign='center'; ctx.fillStyle=hexA(color,0.92); ctx.font='700 26px '+F;
+  ctx.fillText('#순천대  #SDGs  #지구통제실  #2050지구생존', cx, H-70);
+
+  return await new Promise(res=> cv.toBlob(res,'image/png',0.95));
+}
+
+/* 공유: 카드뉴스 이미지를 그대로 공유/저장(텍스트 없이 인스타 스토리에 바로 업로드) */
+async function shareResult(){
+  if(!LAST_ENDING) return;
+  const btn = document.querySelector('#shareCard button[onclick="shareResult()"]');
+  const origin = btn ? btn.textContent : '';
+  if(btn){ btn.textContent='🖼️ 카드 생성 중…'; btn.disabled=true; }
+  try{
+    const blob = await buildShareBlob();
+    if(!blob){ miniToast('이미지 생성에 실패했어요. 스크린샷으로 공유해 주세요 📸'); return; }
+    const file = new File([blob], 'survive2050.png', { type:'image/png' });
+
+    // 1순위: 파일 공유(모바일 → 인스타 스토리 등으로 바로 전송)
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file] }); return; }
+      catch(e){ if(e && e.name==='AbortError') return; }
+    }
+    // 폴백: 이미지 다운로드(저장 후 스토리에 업로드)
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='survive2050.png'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1500);
+    miniToast('결과 카드 이미지를 저장했어요! 인스타 스토리에 올려보세요 📸');
+  }catch(e){
+    miniToast('이미지 생성에 실패했어요. 스크린샷으로 공유해 주세요 📸');
+  }finally{
+    if(btn){ btn.textContent=origin; btn.disabled=false; }
+  }
+}
+
+/* ═══════════════ 9. 시네마틱 인트로 + 난이도 + 업적 진열장 ═══════════════ */
+function screenIntro(){
+  const stage = document.getElementById('stage');
+  document.getElementById('app-root').style.display = '';   // 엔딩에서 숨겼던 게임 화면 복원
+  document.getElementById('app-root').classList.remove('earthquake','glitch-red');
+  const ov = document.getElementById('endingOverlay');
+  if(ov){ ov.classList.add('hidden'); ov.innerHTML=''; }
+
+  const earned = getBadges();
+  const badgeHTML = Object.keys(ACH_META).map(key=>{
+    const ok = earned.includes(key);
+    const ic = ACH_META[key].name.split(' ')[0];
+    const nm = ACH_META[key].name.split(' ').slice(1).join(' ');
+    return `<div class="p-2 rounded-lg text-center ${ok?'bg-amber-500/10 border border-amber-500/30 text-amber-300':'bg-white/5 opacity-30 text-slate-500'} text-[10px]">
+        <div class="text-base mb-0.5">${ic}</div><div class="font-bold truncate">${nm}</div></div>`;
+  }).join('');
+
+  // 난이도 선택 칩
+  const diffHTML = Object.values(DIFFS).map(dd=>{
+    const on = dd.key === currentDiff;
+    return `<button onclick="selectDiff('${dd.key}')" class="rounded-xl p-2 text-center border transition active:scale-95 ${on?'bg-emerald-500/20 border-emerald-400 text-emerald-100':'bg-white/5 border-white/10 text-slate-400'}">
+        <div class="text-base leading-none">${dd.emoji}</div>
+        <div class="text-[11px] font-bold mt-1">${dd.label}</div>
+      </button>`;
+  }).join('');
+
+  // 🗓️ 데일리 챌린지 토글(날짜 시드 → 모두가 같은 판)
+  const dailyHTML = `<button onclick="toggleDaily()" class="w-full rounded-xl p-2 mb-4 text-center border transition active:scale-95 ${dailyMode?'bg-sky-500/20 border-sky-400 text-sky-100':'bg-white/5 border-white/10 text-slate-400'}">
+      <span class="text-xs font-bold">🗓️ 오늘의 지구 (데일리 챌린지) ${dailyMode?'· ON':'· OFF'}</span>
+      <div class="text-[10px] opacity-80 mt-0.5">${dailyMode?'오늘 날짜로 고정된 같은 판 — 친구와 점수를 겨뤄보세요':'켜면 전 세계가 같은 시나리오로 경쟁합니다'}</div>
+    </button>`;
+
+  // 🎬 엔딩 도감(발견/미발견 실루엣)
+  const seenEnd = getEndingDex();
+  const dexHTML = Object.keys(ENDING_DEX).map(id=>{
+    const ok = seenEnd.includes(id), m = ENDING_DEX[id];
+    return `<div class="p-1.5 rounded-lg text-center ${ok?'bg-emerald-500/10 border border-emerald-500/30 text-emerald-200':'bg-white/5 opacity-40 text-slate-500'} text-[9px]">
+        <div class="text-sm leading-none">${ok?m.emoji:'❔'}</div>
+        <div class="font-bold truncate mt-0.5">${ok?m.name:'???'}</div></div>`;
+  }).join('');
+
+  // 시네마틱 인트로 잔불(재) 입자
+  let embers = '';
+  for(let i=0;i<10;i++){
+    const l = (Math.random()*100).toFixed(1);
+    const dur = (6+Math.random()*6).toFixed(1);
+    const dl  = (-Math.random()*8).toFixed(1);
+    const sz  = (2+Math.random()*3).toFixed(0);
+    embers += `<span class="hero-ember" style="left:${l}%; width:${sz}px; height:${sz}px; animation-duration:${dur}s; animation-delay:${dl}s"></span>`;
+  }
+
+  G = null; updateSky(); updateHeat();   // 인트로는 시원한 기본 하늘 + 입자(열기 0)
+  // 상단 지표를 시작값으로 리셋(직전 게임 잔상 제거)
+  document.getElementById('vTemp').innerText = START.temp.toFixed(2);
+  document.getElementById('vSea').innerText  = START.sea;
+  document.getElementById('vEco').innerText  = START.eco;
+  document.getElementById('bTemp').style.width = clamp((START.temp/4)*100,4,100)+'%';
+  document.getElementById('bSea').style.width  = clamp((START.sea/120)*100,2,100)+'%';
+  document.getElementById('bEco').style.width  = clamp(START.eco,2,100)+'%';
+
+  const hasSave = !!readSave();
+  stage.innerHTML = `
+    <div class="animate-fade-in">
+      <!-- 시네마틱 히어로 아트(지구·파도·도시·구름·새싹 조합 제거) -->
+      <div class="intro-hero mb-4">
+        <div class="hero-sun"></div>
+        <div class="hero-haze"></div>
+        <div class="hero-skyline"></div>
+        <div class="hero-grid"></div>
+        ${embers}
+        <div class="hero-title-wrap">
+          <div class="hero-yr">CLIMATE CONTROL · YEAR</div>
+          <div class="hero-2050">2050</div>
+          <div class="hero-kr">멸망 직전 지구에서 살아남기</div>
+        </div>
+      </div>
+
+      <div class="glass-main p-5 rounded-2xl shadow-xl">
+        <p class="text-xs text-slate-400 text-center mb-4">UN SDGs 기반 기후 통제 시뮬레이션 · 총 ${TOTAL_STAGES}단계의 결단</p>
+
+        <div class="mb-1.5 text-[11px] font-bold text-slate-300 text-left">⚙️ 난이도 선택</div>
+        <div class="grid grid-cols-4 gap-2 mb-1.5">${diffHTML}</div>
+        <p class="text-[10px] text-slate-400 leading-relaxed mb-3 min-h-[26px]">${diffCfg().note}</p>
+        ${dailyHTML}
+
+        <button id="startBtn" class="glow-pulse w-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black py-3.5 text-sm active:scale-95 transition shadow-xl mb-2.5">
+          ▶ 통제실 입장 (새 게임)
+        </button>
+        ${hasSave?`<button id="resumeBtn" class="w-full rounded-full glass-soft border border-white/10 text-slate-200 font-bold py-3 text-sm active:scale-95 transition mb-5">💾 이어하기</button>`:'<div class="mb-5"></div>'}
+
+        <div class="border-t border-white/5 pt-4">
+          <div class="text-xs font-bold text-slate-400 text-left mb-2">🏆 영구 업적 진열장 (${earned.length}/${Object.keys(ACH_META).length})</div>
+          <div class="grid grid-cols-5 gap-1.5">${badgeHTML}</div>
+        </div>
+
+        <div class="border-t border-white/5 pt-4 mt-4">
+          <div class="text-xs font-bold text-slate-400 text-left mb-2">🎬 엔딩 도감 (${seenEnd.length}/${Object.keys(ENDING_DEX).length})</div>
+          <div class="grid grid-cols-4 gap-1.5">${dexHTML}</div>
+        </div>
+      </div>
+    </div>`;
+
+  // 사용자 클릭 시점에 오디오 가동(자동재생 정책 대응)
+  document.getElementById('startBtn').onclick = ()=>{ if(!soundEnabled) toggleSound(); startGame(); };
+  const rb = document.getElementById('resumeBtn');
+  if(rb) rb.onclick = ()=>{ if(!soundEnabled) toggleSound(); loadGame(); };
+}
+
+function startGame(){
+  document.getElementById('app-root').style.display = '';
+  setupRNG();   // 데일리 모드면 날짜 시드 RNG로 교체(친구와 같은 판)
+  G = { stats: freshStats(), history: [], currentStep: 0, gameQueue: [], modifier: null,
+        renderingHalted: false, rollTimers: [], budget: 0, budgetTotal: 0,
+        flags: new Set(), pending: [], gambleWins: 0, choiceTimer: null, daily: dailyMode };
+  buildQueue();
+  if(diffCfg().budget){ G.budgetTotal = computeBudget(); G.budget = G.budgetTotal; }
+  document.getElementById('warn').className = 'hidden';
+  document.getElementById('endingOverlay').classList.add('hidden');
+  syncHUD(); saveGame();
+  renderCurrentScenario();
+}
+/* 「예산/정치」: 전체 큐의 최대 지출 합의 70%만 지급(자금 확보형 환급으로 숨통) */
+function computeBudget(){
+  let maxSpend = 0;
+  G.gameQueue.forEach(it=>{ maxSpend += Math.max(...it.scene.choices.map(c=>costOf(c, it.tier))); });
+  return Math.round(maxSpend * 0.7 / 10) * 10;
+}
+function restartGame(){
+  if(G) G.renderingHalted = false;
+  const ov = document.getElementById('endingOverlay');
+  ov.classList.add('hidden'); ov.innerHTML='';
+  clearSave();
+  screenIntro();
+}
+
+/* ═══════════════ 10. 저장 / 복구 ═══════════════ */
+const STORAGE_KEY = 'survive2050_save';
+function saveGame(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      currentStep:G.currentStep, gameQueue:G.gameQueue, stats:G.stats, history:G.history,
+      diff:currentDiff, budget:G.budget, budgetTotal:G.budgetTotal, savedAt:Date.now(),
+      flags:[...(G.flags||[])], pending:G.pending||[], gambleWins:G.gambleWins||0, daily:!!G.daily,
+    }));
+  }catch(e){}
+}
+function readSave(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY); if(!raw) return null;
+    const d = JSON.parse(raw);
+    const ok = d && typeof d.currentStep==='number' && Array.isArray(d.gameQueue) &&
+      d.gameQueue.length===TOTAL_STAGES && d.stats && typeof d.stats.temp==='number' &&
+      Array.isArray(d.history) && d.currentStep>=1 && d.currentStep<TOTAL_STAGES;
+    if(!ok) return null;
+    if(d.gameQueue.some(q=> !q || !q.scene || !Array.isArray(q.scene.choices))) return null;
+    return d;
+  }catch(e){ return null; }
+}
+function clearSave(){ try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} }
+function loadGame(){
+  const saved = readSave(); if(!saved){ startGame(); return; }
+  document.getElementById('app-root').style.display = '';
+  if(saved.diff && DIFFS[saved.diff]) currentDiff = saved.diff;
+  dailyMode = !!saved.daily; setupRNG();
+  G = { currentStep: saved.currentStep, gameQueue: saved.gameQueue, stats: saved.stats,
+        history: saved.history, modifier: null, renderingHalted: false, rollTimers: [],
+        budget: (typeof saved.budget==='number'?saved.budget:0), budgetTotal: (typeof saved.budgetTotal==='number'?saved.budgetTotal:0),
+        flags: new Set(Array.isArray(saved.flags)?saved.flags:[]), pending: Array.isArray(saved.pending)?saved.pending:[],
+        gambleWins: saved.gambleWins||0, choiceTimer: null, daily: !!saved.daily };
+  document.getElementById('endingOverlay').classList.add('hidden');
+  syncHUD();
+  renderCurrentScenario();
+}
+function syncHUD(){
+  document.getElementById('vTemp').innerText = (+G.stats.temp).toFixed(2);
+  document.getElementById('vSea').innerText  = Math.round(G.stats.sea);
+  document.getElementById('vEco').innerText  = Math.round(G.stats.eco);
+  updateBars();
+  updateSky();
+  updateHeat();
+}
+
+/* ═══════════════ 부팅 ═══════════════ */
+function boot(){
+  document.getElementById('soundBtn').onclick = toggleSound;
+  syncHUD();
+  screenIntro();
+}
+window.onload = boot;

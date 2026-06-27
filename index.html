@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>2050 · 멸망 직전 지구에서 살아남기</title>
+<meta name="description" content="UN SDGs 기반 기후 통제 시뮬레이션 — 당신의 선택이 2050년 지구의 운명을 바꿉니다." />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<script>
+  if (window.tailwind) {
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans:['"Noto Sans KR"','sans-serif'], display:['Gaegu','"Noto Sans KR"','cursive'], tech:['Orbitron','"Noto Sans KR"','sans-serif'] },
+        colors: { eco:{ 400:'#34d399', 500:'#10b981', 600:'#059669' } }
+      } }
+    };
+  }
+</script>
+<style>
+  :root{
+    color-scheme: dark;
+    --sky-top:#0b2545; --sky-mid:#13315c; --sky-bot:#1d3461;
+    /* 일러스트 반응형 크기 (데스크톱 기본값) */
+    --motif: 152px;
+    --float: 64px;
+    /* 세이프 에어리어(노치/홈 인디케이터) */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+  /* 모바일에서 일러스트 축소 */
+  @media (max-width: 640px){
+    :root{ --motif: 124px; --float: 52px; }
+  }
+
+  html,body{ -webkit-tap-highlight-color: transparent; overscroll-behavior:none; background:#0f172a; }
+  body{ min-height:100dvh; }
+
+  /* 생태계 상태에 따라 변하는 하늘 그라데이션 배경 */
+  .sky{ position:fixed; inset:0; z-index:0; pointer-events:none;
+    background: radial-gradient(120% 90% at 50% -10%, var(--sky-top) 0%, var(--sky-mid) 45%, var(--sky-bot) 100%);
+    transition: background 1.4s ease; }
+
+  /* 떠다니는 배경 입자 */
+  .particles{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .particle{ position:absolute; bottom:-12px; border-radius:9999px; animation: rise linear infinite; }
+  @keyframes rise  { 0%{ transform: translateY(20px); opacity:0 } 20%{opacity:.7} 100%{ transform: translateY(-110vh); opacity:0 } }
+  @keyframes floaty{ 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-12px) } }
+  @keyframes glowPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(52,211,153,0) } 50%{ box-shadow:0 0 28px 4px rgba(52,211,153,.4) } }
+  .floaty{ animation: floaty 5s ease-in-out infinite; }
+  .glow-pulse{ animation: glowPulse 2.6s ease-in-out infinite; }
+  .glass-main { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+  .glass-soft { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+  /* 기후 위기 임계점 화면 진동 연출 */
+  .earthquake { animation: shake 0.15s infinite; }
+  @keyframes shake {
+    0%   { transform: translate(1px, 1px) rotate(0deg); }
+    10%  { transform: translate(-1px, -2px) rotate(-1deg); }
+    20%  { transform: translate(-3px, 0px) rotate(1deg); }
+    30%  { transform: translate(0px, 2px) rotate(0deg); }
+    40%  { transform: translate(1px, -1px) rotate(1deg); }
+    100% { transform: translate(1px, 2px) rotate(0deg); }
+  }
+  .glitch-red { box-shadow: inset 0 0 60px rgba(239, 68, 68, 0.35); border: 1px solid rgba(239, 68, 68, 0.4) !important; }
+
+  @keyframes fadeIn { from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform: translateY(0);} }
+  .animate-fade-in { animation: fadeIn 0.45s ease both; }
+  @keyframes popIn { 0%{opacity:0; transform: scale(.94);} 100%{opacity:1; transform: scale(1);} }
+  .animate-pop { animation: popIn 0.5s cubic-bezier(.2,1.1,.4,1) both; }
+  .bar-fill { transition: width 0.7s cubic-bezier(.3,1,.4,1); }
+  ::-webkit-scrollbar{ width:0; height:0; }
+
+  /* ─────────── 세이프 에어리어: 상단 헤더 + 토스트 ─────────── */
+  #app-root{ padding-top: calc(1rem + var(--safe-top)); padding-bottom: calc(1rem + var(--safe-bot)); }
+  .safe-toast{ bottom: calc(1.5rem + var(--safe-bot)); right: calc(1.5rem + var(--safe-right)); }
+
+  /* ─────────── 모바일: 상단 정렬 + 자연 스크롤 ─────────── */
+  @media (max-width: 640px){
+    body{ display:block; }
+    #app-root{ justify-content:flex-start; min-height:100dvh; }
+    #stage{ justify-content:flex-start; padding-top: 0.5rem; }
+  }
+
+  /* ═══════════ 시네마틱 인트로 아트 ═══════════ */
+  .intro-hero{
+    position:relative; width:100%; height: 300px; border-radius:1.25rem; overflow:hidden;
+    background: linear-gradient(180deg, #05060e 0%, #0a1230 38%, #2a1a3e 70%, #5a2240 100%);
+    box-shadow: inset 0 -60px 80px -30px rgba(0,0,0,.7), 0 20px 50px -20px rgba(0,0,0,.6);
+    isolation:isolate;
+  }
+  @media (max-width:640px){ .intro-hero{ height: 252px; } }
+  /* 폭주하는 태양 / 열돔 */
+  .hero-sun{
+    position:absolute; left:50%; bottom:34%; transform:translateX(-50%);
+    width:160px; height:160px; border-radius:9999px;
+    background: radial-gradient(circle at 50% 50%, #fff7d6 0%, #ffba49 30%, #ff5e3a 62%, rgba(255,94,58,0) 72%);
+    filter: blur(2px); animation: sunPulse 4.5s ease-in-out infinite; z-index:1;
+  }
+  @keyframes sunPulse{ 0%,100%{ transform:translateX(-50%) scale(1); opacity:.95 } 50%{ transform:translateX(-50%) scale(1.08); opacity:1 } }
+  /* 대기 글로우 라인 */
+  .hero-haze{
+    position:absolute; left:0; right:0; bottom:30%; height:3px; z-index:1;
+    background: linear-gradient(90deg, transparent, rgba(255,180,73,.85), transparent);
+    box-shadow: 0 0 24px 6px rgba(255,120,60,.45);
+  }
+  /* 원근 그리드(사이파이 통제실 바닥) */
+  .hero-grid{
+    position:absolute; left:-20%; right:-20%; bottom:-2px; height:36%; z-index:2;
+    background-image: linear-gradient(rgba(80,220,200,.25) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(80,220,200,.18) 1px, transparent 1px);
+    background-size: 38px 26px;
+    transform: perspective(220px) rotateX(64deg);
+    transform-origin: bottom center;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 60%);
+            mask-image: linear-gradient(180deg, transparent, #000 60%);
+  }
+  /* 도시 스카이라인 실루엣 */
+  .hero-skyline{
+    position:absolute; left:0; right:0; bottom:30%; height:64px; z-index:2;
+    background:#05060e;
+    clip-path: polygon(0% 100%, 0% 55%, 6% 55%, 6% 30%, 12% 30%, 12% 62%, 18% 62%, 18% 18%, 23% 18%, 23% 62%, 30% 62%, 30% 42%, 36% 42%, 36% 70%, 43% 70%, 43% 8%, 48% 8%, 48% 70%, 56% 70%, 56% 36%, 62% 36%, 62% 60%, 69% 60%, 69% 22%, 75% 22%, 75% 62%, 82% 62%, 82% 44%, 88% 44%, 88% 58%, 94% 58%, 94% 34%, 100% 34%, 100% 100%);
+    filter: drop-shadow(0 0 10px rgba(255,120,60,.35));
+  }
+  /* 떠다니는 잔불/재 (히어로 박스 내부에서만 상승) */
+  @keyframes emberRise{ 0%{ transform:translateY(0); opacity:0 } 12%{ opacity:1 } 100%{ transform:translateY(-230px); opacity:0 } }
+  .hero-ember{ position:absolute; bottom:28%; width:4px; height:4px; border-radius:9999px; background:rgba(255,170,90,.9);
+    box-shadow:0 0 8px 2px rgba(255,140,60,.6); z-index:3; animation: emberRise linear infinite; }
+  .hero-title-wrap{ position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:26px; text-align:center; }
+  .hero-yr{ font-family:'Orbitron', sans-serif; font-weight:900; letter-spacing:.28em;
+    font-size: 13px; color:#7dd3fc; text-shadow:0 0 14px rgba(56,189,248,.6); }
+  .hero-2050{ font-family:'Orbitron', sans-serif; font-weight:900; line-height:.92;
+    font-size: 64px; color:#fff;
+    text-shadow: 0 0 18px rgba(255,120,60,.55), 0 4px 22px rgba(0,0,0,.6);
+    background: linear-gradient(180deg,#ffffff,#ffd9a8 60%,#ff7e4d);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  @media (max-width:640px){ .hero-2050{ font-size:54px; } }
+  .hero-kr{ margin-top:4px; font-family:'Gaegu', cursive; font-size:22px; color:#fde68a; text-shadow:0 2px 12px rgba(0,0,0,.6); }
+
+  /* ═══════════ 시나리오 풍경 아트 ═══════════ */
+  .scene-art{
+    position:relative; width:100%; height:180px; border-radius:1rem; overflow:hidden; margin-bottom:0.9rem;
+    background: linear-gradient(180deg, var(--art-top,#0b2545) 0%, var(--art-bot,#1d3461) 100%);
+    box-shadow: inset 0 -40px 50px -28px rgba(0,0,0,.6);
+    isolation:isolate;
+  }
+  @media (max-width:640px){ .scene-art{ height:152px; } }
+  /* 중앙 모티프 뒤 후광 */
+  .scene-glow{
+    position:absolute; left:50%; bottom:30%; transform:translate(-50%,30%);
+    width: calc(var(--motif) * 1.5); height: calc(var(--motif) * 1.5); border-radius:9999px;
+    background: radial-gradient(circle, var(--art-ring,rgba(52,211,153,.55)) 0%, transparent 68%);
+    filter: blur(6px); z-index:0;
+  }
+  /* 야경 스카이라인(중앙 모티프와 겹치지 않게 하단 고정) */
+  .scene-skyline{
+    position:absolute; left:0; right:0; bottom:0; height:42px; z-index:1; background:rgba(2,6,14,.92);
+    clip-path: polygon(0 100%,0 60%,7% 60%,7% 34%,13% 34%,13% 66%,20% 66%,20% 22%,26% 22%,26% 66%,34% 66%,34% 46%,40% 46%,40% 72%,47% 72%,47% 14%,52% 14%,52% 72%,60% 72%,60% 40%,66% 40%,66% 64%,73% 64%,73% 26%,79% 26%,79% 66%,86% 66%,86% 48%,92% 48%,92% 60%,100% 60%,100% 100%);
+  }
+  /* 중앙 모티프 */
+  .scene-motif{
+    position:absolute; left:50%; bottom:22%; transform:translateX(-50%);
+    font-size: var(--motif); line-height:1; z-index:2;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,.5));
+    animation: floaty 6s ease-in-out infinite;
+  }
+  /* 좌우 대칭 떠다니는 아이콘 */
+  .scene-float{
+    position:absolute; font-size: var(--float); z-index:3;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,.45));
+    animation: floaty 5s ease-in-out infinite;
+  }
+
+  /* ═══════════ 기온 색온도 드리프트(더워질수록 화면이 붉어짐) ═══════════ */
+  #heatLayer{ position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0; transition:opacity 1.2s ease;
+    background: radial-gradient(120% 90% at 50% 0%, rgba(255,80,40,0) 0%, rgba(220,38,38,.30) 68%, rgba(120,10,10,.55) 100%);
+    mix-blend-mode:screen; }
+
+  /* ═══════════ 선택 커밋 연출 ═══════════ */
+  .choice-btn.committed{ border-color:rgba(52,211,153,.9)!important;
+    box-shadow:0 0 0 2px rgba(52,211,153,.5), 0 0 22px -4px rgba(52,211,153,.85);
+    transform:scale(1.015); transition:all .25s ease; }
+
+  /* ═══════════ 시간압박 링(하드코어) ═══════════ */
+  .choice-ring{ position:absolute; top:10px; right:10px; z-index:5; width:42px; height:42px; border-radius:9999px;
+    display:grid; place-items:center; font-family:'Orbitron',sans-serif; font-weight:900; font-size:15px; color:#fff;
+    background: conic-gradient(#34d399 var(--p,0%), rgba(255,255,255,.12) 0%);
+    box-shadow:0 0 14px -2px rgba(52,211,153,.6); }
+  .choice-ring::after{ content:''; position:absolute; inset:4px; border-radius:9999px; background:#0b1020; }
+  .choice-ring span{ position:relative; z-index:1; }
+  .choice-ring.danger{ background: conic-gradient(#ef4444 var(--p,0%), rgba(255,255,255,.12) 0%); color:#fecaca;
+    box-shadow:0 0 16px -1px rgba(239,68,68,.7); animation: shake .15s infinite; }
+</style>
+</head>
+<body class="font-sans text-slate-100 antialiased selection:bg-emerald-500/30">
+
+  <div id="skyLayer" class="sky"></div>
+  <div id="heatLayer"></div>
+  <div id="particles" class="particles"></div>
+
+  <!-- 인스타 스토리 공유용 카드뉴스 엔딩 오버레이(최상단 z-index) -->
+  <div id="endingOverlay" class="hidden fixed inset-0 z-[100]"></div>
+
+  <div id="app-root" class="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col p-4 relative z-10 transition-all duration-300">
+
+    <header class="w-full pb-4">
+      <div class="glass-main rounded-2xl p-4 shadow-xl">
+        <div class="flex justify-between items-center border-b border-white/5 pb-2.5 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold tracking-wider">YEAR 2050</span>
+            <h1 class="font-display text-lg text-white">지구 통제실</h1>
+          </div>
+          <button id="soundBtn" class="px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition">
+            🔇 소리 꺼짐
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div class="rounded-xl bg-white/5 p-2.5 text-center">
+            <div class="text-[11px] text-slate-400">🌡️ 기온 상승</div>
+            <div class="mt-0.5 font-extrabold text-red-400 text-lg leading-none">+<span id="vTemp">1.10</span>°C</div>
+            <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bTemp" class="bar-fill h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-500" style="width:24%"></div></div>
+          </div>
+          <div class="rounded-xl bg-white/5 p-2.5 text-center">
+            <div class="text-[11px] text-slate-400">🌊 해수면</div>
+            <div class="mt-0.5 font-extrabold text-cyan-300 text-lg leading-none">+<span id="vSea">22</span>cm</div>
+            <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bSea" class="bar-fill h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-600" style="width:18%"></div></div>
+          </div>
+          <div class="rounded-xl bg-white/5 p-2.5 text-center">
+            <div class="text-[11px] text-slate-400">🌱 생태계 건강</div>
+            <div class="mt-0.5 font-extrabold text-emerald-300 text-lg leading-none"><span id="vEco">75</span>%</div>
+            <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bEco" class="bar-fill h-full rounded-full bg-gradient-to-r from-lime-400 to-emerald-500" style="width:75%"></div></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="warn" class="hidden rounded-xl mb-3 text-center text-xs font-bold p-2.5 transition-all"></div>
+
+    <section id="stage" class="flex-1 flex flex-col justify-center py-4"></section>
+  </div>
+
+  <script src="data.js?v=9"></script>
+  <script src="main.js?v=9"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# 의존성/테스트 잔여물(배포에 불필요)
+node_modules/
+package.json
+package-lock.json
+test.js
+
+# OS/에디터
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
