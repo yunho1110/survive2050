@@ -607,8 +607,8 @@ function buildChronicle(){
   return lines.slice(0, 6);
 }
 
-/* 정치 임기 심사 동적 커트라인: 3단계 35% → 6단계 55% → 9단계 75% (후반일수록 여론 눈높이 급상승) */
-function reviewCut(step){ return step===3?35 : step===6?55 : step===9?75 : null; }
+/* 정치 임기 심사 커트라인: 3·6·9단계 모두 35% 통일 (후반 75% 컷이 과도하다는 피드백 → 일관된 기준선) */
+function reviewCut(step){ return (step===3||step===6||step===9) ? 35 : null; }
 
 /* ── 자원 모드 턴 정산: 예산=복리 이자+블랙스완 / 정치=지지율 충원+임기 심사 (상한 없음) ── */
 function resourceTurnTick(){
@@ -626,10 +626,12 @@ function resourceTurnTick(){
   } else {
     const interest = Math.round(G.budget * 0.08);            // 남긴 예산 복리 이자(상한 없음 → 스노우볼)
     if(interest>0){ G.budget = G.budget + interest; resToast(`💰 예산 이자 +${interest}억 (아낄수록 복리)`, 'amber'); }
-    // 🌡️ 기후 재난 복구비: 기온이 높을수록 매 턴 보유 예산의 일부를 강제 차압 → 저축 고인물·돈복사 견제
-    //    유지비 = 현재 예산 × (기온 × 0.05)  ·  1.6°C 부근에서 이자(+8%)와 균형, 그 이상이면 순감소
-    const upkeep = Math.round(G.budget * G.stats.temp * 0.05);
-    if(upkeep>0){ G.budget = Math.max(0, G.budget - upkeep); resToast(`🌡️ 기후 재난 복구비 -${upkeep}억 (기온 ${G.stats.temp.toFixed(1)}°C)`, 'red'); }
+    // 🌡️ 기후 재난 복구비: 기준선(1.5°C)을 「넘는 만큼」만 매 턴 보유 예산의 일부를 차압.
+    //    → 지구를 시원하게(≤1.5°C) 지키면 복구비 0(이자를 온전히 누림). 방치해 더워질수록 가속 차압.
+    //    저축 고인물 견제는 유지하되, 잘 막은 플레이어가 매 턴 「이유 없이」 뜯기는 느낌을 제거.
+    const heatOver = Math.max(0, G.stats.temp - 1.5);
+    const upkeep = Math.round(G.budget * heatOver * 0.07);
+    if(upkeep>0){ G.budget = Math.max(0, G.budget - upkeep); resToast(`🌡️ 기후 재난 복구비 -${upkeep}억 (기온 ${G.stats.temp.toFixed(1)}°C · 1.5°C 초과분)`, 'red'); }
     // 블랙스완: 총예산 초과로 과대 축적할수록 확률적 시장 쇼크로 비축분 증발(고인물 저축 방지)
     if(G.budgetTotal>0 && G.budget > G.budgetTotal){
       const over = G.budget / G.budgetTotal - 1;             // 100% 초과 비율
@@ -1342,7 +1344,7 @@ function screenIntro(){
           </summary>
           <div class="px-3 pb-3 pt-1 space-y-2 text-[10px] leading-relaxed text-slate-300">
             <div><b class="text-amber-300">💰 예산 모드</b> — 매 턴 선택은 <b>2개 소비 / 2개 자금 확보(환급)</b>로 갈립니다. 남긴 예산엔 복리 이자(+8%)가 붙지만, 지구가 뜨거울수록 기후 재난 복구비가 매 턴 차압돼요.</div>
-            <div><b class="text-sky-300">🗳️ 정치 모드</b> — 강한 친환경 규제는 지지율↓, 인기영합(환경 포기)은 지지율↑. <b>3·6·9단계 임기 심사</b>(35→55→75%)를 통과해야 자리를 지킵니다.</div>
+            <div><b class="text-sky-300">🗳️ 정치 모드</b> — 강한 친환경 규제는 지지율↓, 인기영합(환경 포기)은 지지율↑. <b>3·6·9단계 임기 심사</b>(매번 지지율 35% 이상)를 통과해야 자리를 지킵니다.</div>
             <div class="rounded-lg bg-gradient-to-r from-amber-500/15 to-fuchsia-500/10 border border-amber-300/40 p-2.5">
               <b class="text-amber-200">⚡ 오버차지 (상한 초과 비축)</b> — 자원 보유 <b>상한이 없습니다</b>. 100%를 넘기면 게이지가 금빛(예산)·보랏빛(정치)으로 흐르는 「과충전」 상태가 돼요. 예산은 <b>후반 메가프로젝트 몰빵용 실탄</b>, 정치는 <b>임기 심사를 버티는 여론 버퍼</b>로 쓰입니다. (부족할 때만 붉은 경고)
             </div>
