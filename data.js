@@ -443,7 +443,7 @@ const ENDING_RULES = [
       desc:'경제 성장을 훼손하지 않으면서 순환경제 100%에 가깝게 도달한, 균형 잡힌 지속가능 미래입니다.' }) },
 
   /* ── 생존했으나 「특정 지표가 무너진」 길 — AGROWTH(A등급)보다 먼저 가로채 도달성 확보 ── */
-  { id:'WATER', when:c=> c.ratio>=c.survive && c.s.sea>=50,
+  { id:'WATER', when:c=> c.ratio>=c.survive && c.s.sea>=(c.seaCut!=null?c.seaCut:50),
     make:()=>({ grade:'B', color:'#06b6d4', title:'🌊 워터월드: 부유식 아크 문명',
       desc:'기온은 어느 정도 방어했으나 빙하 해빙 가속으로 해안 대도시가 전면 수몰됐습니다. 인류는 거대한 해상 메가 플로팅 아크를 세워 바다 위 문명을 이어갑니다.' }) },
   { id:'STEEL', badge:'COLD', when:c=> c.ratio>=c.survive && c.s.eco<25,

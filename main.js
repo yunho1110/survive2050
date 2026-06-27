@@ -200,26 +200,62 @@ function toggleSound(){
   }
 }
 
-/* ═══════════════ 2. 돌발 기후 변수(Random Modifiers) ═══════════════ */
-const MODIFIERS_POOL = [
-  { name:'🔥 초대형 아마존 대화재 촉발',     desc:'이번 턴 생태계 타격이 1.6배 가속화됩니다.', target:'eco',  multiply:1.6, type:'bad' },
-  { name:'🌊 슈퍼 엘니뇨 현상 동시 발생',    desc:'이번 턴 기온 상승 타격이 1.8배 증폭됩니다.', target:'temp', multiply:1.8, type:'bad' },
-  { name:'🧊 북극 메탄 하이드레이트 대분출', desc:'이번 턴 모든 악영향 가중치가 1.5배 폭주합니다.', target:'all', multiply:1.5, type:'bad' },
-  { name:'🌱 글로벌 녹색 보조금 전격 타결',  desc:'이번 턴 생태 복원 정책 효율이 1.4배 향상됩니다.', target:'eco', multiply:1.4, type:'good' },
+/* ═══════════════ 2. 돌발 이벤트(Random Events) ═══════════════
+   두 갈래로 게임 템포를 흔든다:
+   · multiply형 : G.modifier로 「다음 선택의 효과」를 증폭/완화(기존 메커니즘)
+   · apply형    : 발동 즉시 자원(예산)·지지율을 직접 흔드는 충격(자원 모드 전용 향신료)
+   필터: modes(난이도 한정) + cond(지표 임계 조건). 둘 다 통과한 것만 후보. */
+const EVENTS = [
+  /* ── 공통: 다음 선택 효과 증폭/완화(multiply) ── */
+  { name:'🔥 초대형 아마존 대화재',       desc:'이번 턴 생태계 타격이 1.6배 가속됩니다.', target:'eco',  multiply:1.6, type:'bad' },
+  { name:'🌊 슈퍼 엘니뇨 동시 발생',      desc:'이번 턴 기온 상승 타격이 1.8배 증폭됩니다.', target:'temp', multiply:1.8, type:'bad' },
+  { name:'🧊 북극 메탄 하이드레이트 대분출', desc:'이번 턴 모든 악영향이 1.5배 폭주합니다.', target:'all',  multiply:1.5, type:'bad' },
+  { name:'🌱 글로벌 녹색 보조금 타결',     desc:'이번 턴 생태 복원 정책 효율이 1.4배 향상됩니다.', target:'eco', multiply:1.4, type:'good' },
+  { name:'🛰️ 위성 조기경보 적중',         desc:'대비 태세 완비 — 이번 턴 기온 타격이 0.55배로 완화됩니다.', target:'temp', multiply:0.55, type:'good' },
+  { name:'✊ 청년 기후 총파업',            desc:'행동 압력 폭발 — 이번 턴 생태 복원 효율이 1.5배로 치솟습니다.', target:'eco', multiply:1.5, type:'good' },
+  /* ── 조건부: 지표 임계에서만 발동(긴장 가속/숨통) ── */
+  { name:'🌡️ 폭염 도미노', cond:G=>G.stats.temp>=2.2, desc:'임계 근접 — 이번 턴 기온 타격이 2.0배로 폭주합니다.', target:'temp', multiply:2.0, type:'bad' },
+  { name:'🩸 생태 티핑 경보', cond:G=>G.stats.eco<=35, desc:'붕괴 직전 — 이번 턴 생태계 타격이 1.8배로 가속됩니다.', target:'eco', multiply:1.8, type:'bad' },
+  { name:'❄️ 라니냐 한숨 돌리기', cond:G=>G.stats.temp<=1.40, desc:'잠깐의 냉각 — 이번 턴 기온 타격이 0.5배로 줄어듭니다.', target:'temp', multiply:0.5, type:'good' },
+  /* ── 💰 예산 모드 전용: 즉시 자원 충격(apply) ── */
+  { name:'📈 그린본드 완판', modes:['BUDGET'], type:'good', flavor:'녹색 채권이 흥행하며 곳간이 두둑해졌다.',
+    apply:(g)=>{ const v=Math.round(Math.max(40, g.budgetTotal*0.12)); g.budget+=v; return `예산 +${v}억`; } },
+  { name:'🏦 긴급 기후기금 배정', modes:['BUDGET'], cond:G=>G.budget < G.budgetTotal*0.3, type:'good', flavor:'파산 직전, 국제 기후기금이 수혈됐다.',
+    apply:(g)=>{ const v=Math.round(g.budgetTotal*0.18); g.budget+=v; return `예산 +${v}억`; } },
+  { name:'💸 탄소세 소송 패소', modes:['BUDGET'], cond:G=>G.budget>40, type:'bad', flavor:'배상 판결로 곳간이 뜯겼다.',
+    apply:(g)=>{ const v=Math.round(g.budget*0.15); g.budget=Math.max(0,g.budget-v); return `예산 -${v}억`; } },
+  /* ── 🗳️ 정치 모드 전용: 즉시 여론 충격(apply) ── */
+  { name:'📺 기후 다큐 신드롬', modes:['POLITICS'], type:'good', flavor:'온 국민이 다큐에 결집했다.',
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)+10,0,200); return '지지율 +10%'; } },
+  { name:'🗞️ 그린워싱 스캔들', modes:['POLITICS'], type:'bad', flavor:'위장 환경정책이 폭로됐다.',
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-12,0,200); return '지지율 -12%'; } },
+  { name:'🪧 거리 시위 격화', modes:['POLITICS'], cond:G=>G.stats.eco<50, type:'bad', flavor:'악화된 환경에 분노가 거리로 쏟아졌다.',
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-8,0,200); return '지지율 -8%'; } },
 ];
+/* 하위호환: 외부에서 MODIFIERS_POOL을 참조하던 코드 대비(별칭) */
+const MODIFIERS_POOL = EVENTS;
+
 function triggerRandomEvent(){
   const warn = document.getElementById('warn');
-  if(RNG() < 0.28 && G.currentStep > 0 && G.currentStep < TOTAL_STAGES - 1){
-    const rand = MODIFIERS_POOL[Math.floor(RNG()*MODIFIERS_POOL.length)];
-    G.modifier = rand;
-    warn.className = rand.type === 'bad'
-      ? 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-red-950/80 border border-red-700 text-red-300 animate-pulse'
-      : 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-emerald-950/80 border border-emerald-700 text-emerald-300';
-    warn.innerHTML = `🚨 [돌발 속보] ${rand.name}<br/><span class="font-normal text-[11px]">${rand.desc}</span>`;
+  G.modifier = null;
+  if(!(RNG() < 0.34 && G.currentStep > 0 && G.currentStep < TOTAL_STAGES - 1)){ if(warn) warn.className = 'hidden'; return; }
+  // 현재 난이도·지표 조건을 통과한 이벤트만 후보로
+  const pool = EVENTS.filter(e => (!e.modes || e.modes.includes(currentDiff)) && (!e.cond || e.cond(G)));
+  if(!pool.length){ if(warn) warn.className = 'hidden'; return; }
+  const ev = pool[Math.floor(RNG()*pool.length)];
+  let body;
+  if(ev.apply){
+    const res = ev.apply(G);                       // 즉시 자원/지지율 충격(게이지는 직후 renderCurrentScenario에서 갱신)
+    body = `${ev.flavor||''} <b>${res}</b>`;
   } else {
-    G.modifier = null;
-    warn.className = 'hidden';
+    G.modifier = ev;                               // 다음 선택 효과 증폭/완화
+    body = ev.desc || '';
   }
+  if(!warn) return;
+  warn.className = ev.type === 'bad'
+    ? 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-red-950/80 border border-red-700 text-red-300 animate-pulse'
+    : 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-emerald-950/80 border border-emerald-700 text-emerald-300';
+  warn.innerHTML = `🚨 [돌발 속보] ${ev.name}<br/><span class="font-normal text-[11px]">${body}</span>`;
 }
 
 /* ═══════════════ 3. 라이프타임 영구 업적(Achievement) ═══════════════ */
@@ -689,6 +725,9 @@ function getEnding(ratio){
     survive: d.surviveCut,
     // GREY/DARK 경계를 「생존 가능한 최저 점수」 위로 올림 → 균형형(8점)만 반복해 살아남은 판이 DARK로 떨어져 도달 가능
     cCut:    Math.max(d.surviveCut - 0.12, 0.40),
+    // WATER(워터월드) 동적 진입 기준: 정치 모드는 자원·지지율 족쇄로 「점수 유지 + 해수면」 조합이 희박 →
+    //   해수면 컷을 낮춰 진입 장벽 완화. 그마저도 생태가 양호(eco↑)할수록 더 낮춰 「물만 차오른」 워터월드를 잘 잡아냄.
+    seaCut:  (d.politics ? 38 : 50) - (s.eco>=55 ? 4 : 0),
   };
   evaluateCombos();
   const rules = window.ENDING_RULES || [];
@@ -1010,6 +1049,144 @@ function renderFeedbackPage(choice){
   };
 }
 
+/* ═══════════════ 7.5 스포티파이 랩드 감성 「통치 결산 영수증」 ═══════════════ */
+/* 한 판의 선택 패턴으로 통치 페르소나(아키타입)를 뽑는다 */
+function govPersona(h){
+  const best=h.filter(x=>x.baseScore>=20).length, worst=h.filter(x=>x.baseScore<8).length;
+  const gam=h.filter(x=>x.gambled).length;
+  const has=f=>h.some(x=>x.flag===f);
+  if(has('great_transition'))      return { emoji:'🌅', name:'인류세를 끝낸 선구자', tag:'THE GREAT TRANSITION' };
+  if(gam>=3)                       return { emoji:'🎲', name:'벼랑 끝의 승부사',     tag:'THE HIGH ROLLER' };
+  if(best>=7)                      return { emoji:'🌱', name:'이상주의 통치자',       tag:'THE IDEALIST' };
+  if(worst>=5)                     return { emoji:'🏭', name:'냉혹한 실리주의자',     tag:'THE PRAGMATIST' };
+  if(has('coal_on')||has('denial'))return { emoji:'🌫️', name:'타협의 생존가',        tag:'THE SURVIVOR' };
+  if(best>=worst)                  return { emoji:'⚖️', name:'줄타기의 균형감각',     tag:'THE TIGHTROPE' };
+  return                                  { emoji:'🧭', name:'표류하는 관리자',       tag:'THE DRIFTER' };
+}
+/* 영수증 데이터(HTML·PNG 공용) */
+function buildReceipt(){
+  const h=(G&&G.history)||[]; const s=(G&&G.stats)||freshStats(); const d=diffCfg();
+  const g =h.filter(x=>x.baseScore>=20).length;
+  const y =h.filter(x=>x.baseScore>=10&&x.baseScore<20).length;
+  const o =h.filter(x=>x.baseScore>=8 &&x.baseScore<10).length;
+  const rd=h.filter(x=>x.baseScore<8).length;
+  const gam=h.filter(x=>x.gambled).length, gw=h.filter(x=>x.gambled&&x.won===true).length;
+  const freq={}; h.forEach(x=>{ if(x.sdg) freq[x.sdg]=(freq[x.sdg]||0)+1; });
+  let topSdg=null, mx=0; for(const k in freq){ if(freq[k]>mx){ mx=freq[k]; topSdg=+k; } }
+  const flagOrder=['great_transition','geo','coal_on','denial','reckless'];
+  let sig=null; for(const f of flagOrder){ const e=h.find(x=>x.flag===f); if(e){ sig=e; break; } }
+  if(!sig){ const tops=h.filter(x=>x.baseScore>=20); sig=tops[tops.length-1]||h[h.length-1]; }
+  const now=new Date(), pad=n=>String(n).padStart(2,'0');
+  const date=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return { h, s, d, g, y, o, rd, gam, gw, topSdg, sdgName: topSdg ? (SDG[topSdg]?SDG[topSdg].name:'SDGs') : '—',
+    persona: govPersona(h), sigText: sig?sig.choice:'—', date, scorePct: Math.round(s.score/MAX_SCORE*100) };
+}
+/* 영수증 카드 마크업(크림 영수증 톤) — 결과 카드의 두 번째 면 */
+function receiptCardHTML(result){
+  const R=buildReceipt(), s=R.s, color=result.color;
+  const sgn=v=> (Math.abs(v)<0.005?'±0':(v>0?'+':'')+(Math.abs(v)<1?v.toFixed(2):Math.round(v)));
+  const row=(l,v,b)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;${b?'font-weight:700':''}"><span>${l}</span><span style="text-align:right">${v}</span></div>`;
+  const dash=`<div style="border-top:1px dashed #c2b9a3;margin:8px 0"></div>`;
+  return `
+  <div id="receiptCard" class="relative w-full max-w-[400px] my-auto flex-col rounded-[20px] overflow-hidden animate-pop"
+       style="display:none; aspect-ratio:9/16; max-height:calc(100dvh - 24px); background:#0b1020; border:1px solid ${color}55; box-shadow:0 30px 80px -20px ${color}66;">
+    <div style="flex:1; min-height:0; overflow-y:auto; padding:16px;">
+      <div style="font-family:'Courier New',ui-monospace,monospace; background:#f5f1e6; color:#23201a; border-radius:10px; padding:18px 16px; box-shadow:0 12px 30px -10px rgba(0,0,0,.6);">
+        <div style="text-align:center; letter-spacing:.18em; font-weight:700; font-size:15px;">★ SURVIVE 2050 ★</div>
+        <div style="text-align:center; font-size:11px; margin-top:2px;">통치 결산 영수증 · GOVERNANCE RECEIPT</div>
+        <div style="text-align:center; font-size:10px; color:#6b6453; margin-top:4px;">난이도 ${R.d.emoji} ${R.d.label} · ${R.date}</div>
+        ${dash}
+        ${row('통치 스타일', R.persona.emoji+' '+R.persona.name, true)}
+        <div style="text-align:right; font-size:9px; letter-spacing:.18em; color:#8a8270;">— ${R.persona.tag} —</div>
+        ${row('최애 목표', R.topSdg ? ('SDG '+R.topSdg+' '+R.sdgName) : '—')}
+        ${dash}
+        ${row('🟢 최선의 결단', '× '+R.g)}
+        ${row('🟡 절충의 선택', '× '+R.y)}
+        ${row('🟠 아쉬운 균형', '× '+R.o)}
+        ${row('🔴 값비싼 선택', '× '+R.rd)}
+        ${row('🎲 도박 전적', R.gam ? (R.gw+'승 '+(R.gam-R.gw)+'패') : '없음')}
+        ${dash}
+        ${row('🌡️ 기온', START.temp.toFixed(2)+' → '+s.temp.toFixed(2)+'°C  ('+sgn(s.temp-START.temp)+')')}
+        ${row('🌊 해수면', Math.round(START.sea)+' → '+Math.round(s.sea)+'cm  ('+sgn(s.sea-START.sea)+')')}
+        ${row('🌱 생태계', Math.round(START.eco)+' → '+Math.round(s.eco)+'%  ('+sgn(s.eco-START.eco)+')')}
+        ${dash}
+        <div style="font-size:10px; color:#6b6453;">시그니처 정책</div>
+        <div style="font-weight:700; font-size:12px; margin-top:2px;">"${R.sigText}"</div>
+        ${dash}
+        ${row('최종 등급', result.grade, true)}
+        ${row('지속가능성', R.scorePct+'% · '+s.score+'점', true)}
+        <div style="border-top:2px solid #23201a;margin:9px 0"></div>
+        <div style="height:34px;background:repeating-linear-gradient(90deg,#23201a 0 2px,transparent 2px 4px,#23201a 4px 5px,transparent 5px 9px);margin:4px 0;"></div>
+        <div style="text-align:center;font-size:10px;letter-spacing:.04em;">#2050지구생존  #순천대  #지구통제실</div>
+        <div style="text-align:center;font-size:11px;margin-top:8px;color:#6b6453;">고객님의 지구를 이용해 주셔서<br/>감사합니다 🌍</div>
+      </div>
+    </div>
+    <div class="shrink-0" style="padding:0 14px 16px;">
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="shareReceipt()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">📸 영수증 저장</button>
+        <button onclick="toggleReceipt(false)" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">← 결과 카드</button>
+      </div>
+    </div>
+  </div>`;
+}
+function toggleReceipt(show){
+  const a=document.getElementById('shareCard'), b=document.getElementById('receiptCard');
+  if(!a||!b) return;
+  a.style.display = show ? 'none' : 'flex';
+  b.style.display = show ? 'flex' : 'none';
+  if(soundEnabled) playChordSynth(show?[659.25,880]:[392,523.25],'sine',0.12,0.04);
+}
+/* 영수증 → 9:16 PNG(크림 종이 + 바코드) 직접 렌더 */
+async function buildReceiptBlob(result){
+  try{ if(document.fonts && document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const R=buildReceipt(), s=R.s;
+  const W=760, H=1340, M=72, F="'Courier New', monospace";
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0b1020'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#f5f1e6'; rrect(ctx,28,28,W-56,H-56,28); ctx.fill();
+  let y=118;
+  const line=(t,sz,col,al,bold)=>{ ctx.fillStyle=col||'#23201a'; ctx.font=(bold?'700 ':'')+sz+'px '+F; ctx.textAlign=al||'left'; ctx.fillText(t, al==='center'?W/2:(al==='right'?W-M:M), y); };
+  const rowC=(l,v,bold)=>{ ctx.fillStyle='#23201a'; ctx.font=(bold?'700 ':'')+30+'px '+F; ctx.textAlign='left'; ctx.fillText(l,M,y); ctx.textAlign='right'; ctx.fillText(v,W-M,y); y+=44; };
+  const dash=()=>{ ctx.strokeStyle='#c2b9a3'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(M,y-16); ctx.lineTo(W-M,y-16); ctx.stroke(); ctx.setLineDash([]); y+=12; };
+  const sgn=v=>(v>0?'+':'')+(Math.abs(v)<1?v.toFixed(2):Math.round(v));
+  line('★ SURVIVE 2050 ★',36,'#23201a','center',true); y+=46;
+  line('통치 결산 영수증 · GOVERNANCE RECEIPT',22,'#23201a','center'); y+=36;
+  line('난이도 '+R.d.emoji+' '+R.d.label+' · '+R.date,20,'#6b6453','center'); y+=40; dash();
+  rowC('통치 스타일', R.persona.emoji+' '+R.persona.name, true);
+  line('— '+R.persona.tag+' —',18,'#8a8270','right'); y+=36;
+  rowC('최애 목표', R.topSdg?('SDG '+R.topSdg):'—'); dash();
+  rowC('🟢 최선의 결단','× '+R.g); rowC('🟡 절충의 선택','× '+R.y); rowC('🟠 아쉬운 균형','× '+R.o); rowC('🔴 값비싼 선택','× '+R.rd);
+  rowC('🎲 도박 전적', R.gam?(R.gw+'승 '+(R.gam-R.gw)+'패'):'없음'); dash();
+  rowC('🌡️ 기온', START.temp.toFixed(2)+'→'+s.temp.toFixed(2)+'°C ('+sgn(s.temp-START.temp)+')');
+  rowC('🌊 해수면', Math.round(START.sea)+'→'+Math.round(s.sea)+' ('+sgn(s.sea-START.sea)+')');
+  rowC('🌱 생태계', Math.round(START.eco)+'→'+Math.round(s.eco)+'% ('+sgn(s.eco-START.eco)+')'); dash();
+  line('시그니처 정책',20,'#6b6453','left'); y+=36;
+  wrapChars(ctx,'"'+R.sigText+'"',W-2*M,2).forEach(t=>{ line(t,28,'#23201a','left',true); y+=38; });
+  dash();
+  rowC('최종 등급', result.grade, true);
+  rowC('지속가능성', R.scorePct+'% · '+s.score+'점', true);
+  ctx.strokeStyle='#23201a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(M,y-8); ctx.lineTo(W-M,y-8); ctx.stroke(); y+=18;
+  for(let x=M; x<W-M; ){ const w=2+Math.floor(Math.random()*5); ctx.fillStyle='#23201a'; ctx.fillRect(x,y,w,46); x+=w+2+Math.floor(Math.random()*5); } y+=86;
+  line('#2050지구생존   #순천대',20,'#23201a','center'); y+=40;
+  line('고객님의 지구를 이용해 주셔서',20,'#6b6453','center'); y+=30;
+  line('감사합니다 🌍',22,'#6b6453','center');
+  return await new Promise(res=>cv.toBlob(res,'image/png',0.95));
+}
+async function shareReceipt(){
+  const result = LAST_ENDING && LAST_ENDING.result; if(!result) return;
+  const btn=document.querySelector('#receiptCard button[onclick="shareReceipt()"]'); const o=btn?btn.textContent:'';
+  if(btn){ btn.textContent='🧾 생성 중…'; btn.disabled=true; }
+  try{
+    const blob=await buildReceiptBlob(result);
+    if(!blob){ miniToast('이미지 생성 실패 — 스크린샷으로 공유해 주세요 📸'); return; }
+    const file=new File([blob],'survive2050_receipt.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file]}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='survive2050_receipt.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+    miniToast('감성 영수증을 저장했어요! 🧾');
+  }catch(e){ miniToast('이미지 생성 실패 — 스크린샷으로 공유해 주세요 📸'); }
+  finally{ if(btn){ btn.textContent=o; btn.disabled=false; } }
+}
+
 /* ═══════════════ 8. 인스타 스토리 공유용 카드뉴스 엔딩(9:16) ═══════════════ */
 function renderEndingCard(result){
   if(G) G.renderingHalted = result.collapse ? true : G.renderingHalted;
@@ -1098,12 +1275,14 @@ function renderEndingCard(result){
 
         <div class="px-5 pb-5 pt-2 shrink-0">
           <div class="text-center text-[10px] text-slate-400 mb-2">#순천대 #SDGs #지구통제실 #2050지구생존</div>
+          <button onclick="toggleReceipt(true)" class="w-full mb-2 rounded-full py-2.5 font-black text-xs bg-amber-50 text-slate-900 active:scale-95 transition shadow-lg">🧾 감성 영수증 보기 (스포티파이 랩드)</button>
           <div class="grid grid-cols-2 gap-2">
             <button onclick="shareResult()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">📸 스토리 카드 공유</button>
             <button onclick="restartGame()" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">🔄 다시 도전</button>
           </div>
         </div>
       </div>
+      ${receiptCardHTML(result)}
     </div>`;
   ov.classList.remove('hidden');
 
