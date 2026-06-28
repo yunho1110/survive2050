@@ -29,10 +29,10 @@ const DIFFS = {
             note:'전 시나리오 딜레마 + 기온 3.0°C·생태계 0% 도달 시 즉시 붕괴(F) + 등급 컷오프 최상.' },
   /* 「예산」 고유: 남긴 예산에 매 턴 복리 이자 → 저축·투자 타이밍 싸움 */
   BUDGET: { key:'BUDGET', label:'예산',     emoji:'💰', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true,
-            note:'💰 남긴 예산엔 매 턴 이자(복리 8%)가 붙습니다. 초반엔 아끼고 후반 메가프로젝트에 몰빵 — 자금 운용의 타이밍이 승부.' },
+            note:'💰 남긴 예산엔 복리 이자(+8%), 단 기온 1.5°C 초과분만큼 재난 복구비가 차압. 100% 초과 비축은 ⚡오버차지. 경제·산업(SDG 8·9·12) 딜레마가 섞여 나옵니다 — 초반 절약 → 후반 몰빵이 승부.' },
   /* 「정치」 고유: 지지율(여론) 2차 자원 + 임기 심사. 자본 테마링 위에 여론 줄타기 추가 */
   POLITICS:{ key:'POLITICS', label:'정치', emoji:'🗳️', hideHints:true, suddenTemp:3.60, topCut:0.85, surviveCut:0.55, collapse:false, budget:true, politics:true,
-            note:'🗳️ 강한 친환경 규제는 지지율을 깎고, 인기영합은 지지율을 올립니다. 지지율이 높을수록 정치자본이 더 충원되고, 3·6·9단계 임기 심사에서 35% 미만이면 불신임으로 삭감됩니다.' },
+            note:'🗳️ 강한 규제는 지지율↓·인기영합은 지지율↑. 3·6·9단계 임기 심사(35% 이상) 통과 필수. 초반 정치자본은 빠듯하고, 후반엔 정공법(최선)으로 쌓은 점수만큼 자본이 폭발 회복돼 S티어를 노립니다. 사회·불평등(SDG 1·10·16) 딜레마가 섞여 나옵니다.' },
 };
 let currentDiff = 'A';   // 기본을 「도전」으로 → 정답이 안 보이는 진짜 딜레마부터 시작
 let dailyMode = false;   // 🗓️ 오늘의 지구: 날짜 시드로 모두가 같은 판(친구와 점수 비교)
@@ -1557,7 +1557,19 @@ function screenIntro(){
       </div>
 
       <div class="glass-main p-5 rounded-2xl shadow-xl">
-        <p class="text-xs text-slate-400 text-center mb-4">UN SDGs 기반 기후 통제 시뮬레이션 · 총 ${TOTAL_STAGES}단계의 결단</p>
+        <p class="text-xs text-slate-400 text-center mb-3">UN SDGs 기반 기후 통제 시뮬레이션 · 총 ${TOTAL_STAGES}단계의 결단</p>
+
+        <!-- 📖 핵심 루프 안내(항상 노출) — 처음 온 사람도 목표를 알게 -->
+        <div class="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-left">
+          <div class="text-[11px] font-bold text-emerald-300 mb-1">📖 어떻게 작동하나</div>
+          <p class="text-[10px] text-slate-300 leading-relaxed">매 턴 기후 위기를 읽고 <b>4개 정책 중 하나</b>를 고릅니다. 아래 <b>세 지표</b>를 관리해 <b>10단계</b> 뒤 <b>12개 엔딩</b> 중 하나에 도달해요. 선택 직후 결과 화면이 🟢최선~🔴값비싼 <b>판정과 수치 변화</b>를 바로 알려줍니다.</p>
+          <div class="grid grid-cols-3 gap-1.5 mt-2 text-[9px] font-bold">
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌡️ 기온<br/><span class="text-emerald-300">낮을수록 좋음</span></div>
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌊 해수면<br/><span class="text-emerald-300">낮을수록 좋음</span></div>
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌱 생태계<br/><span class="text-emerald-300">높을수록 좋음</span></div>
+          </div>
+          <p class="text-[9px] text-amber-300/80 mt-2">🌍 <b>글로벌 자원 압박</b>: 매 턴 기본으로 기온↑·생태↓가 누적됩니다(후반 가속). 좋은 선택으로 <b>적극 상쇄</b>해야 살아남아요.</p>
+        </div>
 
         <div class="mb-1.5 text-[11px] font-bold text-slate-300 text-left">⚙️ 난이도 선택</div>
         <div class="grid grid-cols-4 gap-2 mb-1.5">${diffHTML}</div>
@@ -1565,17 +1577,17 @@ function screenIntro(){
 
         <!-- 🪙 특수 모드 + 오버차지 가이드(접이식, JS 불필요) -->
         <details class="mb-3 rounded-xl bg-white/5 border border-white/10 overflow-hidden">
-          <summary class="cursor-pointer select-none list-none px-3 py-2.5 text-[11px] font-bold text-slate-200 flex items-center justify-between">
-            <span>🪙 특수 모드 가이드 — 예산 · 정치 & ⚡오버차지</span>
-            <span class="text-slate-500 text-[10px]">자세히 ▾</span>
+          <summary class="cursor-pointer select-none list-none px-3 py-2.5 text-[11px] font-bold text-slate-200 flex items-center justify-between gap-2">
+            <span>🪙 예산·정치 모드 가이드</span>
+            <span class="text-slate-500 text-[10px] shrink-0">자세히 ▾</span>
           </summary>
           <div class="px-3 pb-3 pt-1 space-y-2 text-[10px] leading-relaxed text-slate-300">
-            <div><b class="text-amber-300">💰 예산 모드</b> — 매 턴 선택은 <b>2개 소비 / 2개 자금 확보(환급)</b>로 갈립니다. 남긴 예산엔 복리 이자(+8%)가 붙지만, 지구가 뜨거울수록 기후 재난 복구비가 매 턴 차압돼요.</div>
-            <div><b class="text-sky-300">🗳️ 정치 모드</b> — 강한 친환경 규제는 지지율↓, 인기영합(환경 포기)은 지지율↑. <b>3·6·9단계 임기 심사</b>(매번 지지율 35% 이상)를 통과해야 자리를 지킵니다.</div>
+            <div><b class="text-amber-300">💰 예산 모드</b> (경제·산업 / SDG 8·9·12) — 매 턴 <b>2개 소비 / 2개 자금 확보(환급)</b>로 갈립니다. 남긴 예산엔 복리 이자(+8%)가 붙지만, <b>기온 1.5°C 초과분</b>만큼 재난 복구비가 차압돼요. 철강·공급망·탄소국경세 같은 <b>일자리 트레이드오프</b> 시나리오가 등장합니다.</div>
+            <div><b class="text-sky-300">🗳️ 정치 모드</b> (사회·불평등 / SDG 1·10·16) — 강한 규제는 지지율↓·인기영합은 지지율↑. <b>3·6·9단계 임기 심사(35% 이상)</b> 통과 필수. <b>초반 정치자본은 빠듯</b>하고, 후반엔 <b>정공법(최선 연타)으로 쌓은 점수만큼 자본이 폭발 회복</b>돼요(줬다 뺏기). 유류세·기후난민·에너지빈곤 같은 <b>계층 갈등</b> 시나리오가 나옵니다.</div>
             <div class="rounded-lg bg-gradient-to-r from-amber-500/15 to-fuchsia-500/10 border border-amber-300/40 p-2.5">
-              <b class="text-amber-200">⚡ 오버차지 (상한 초과 비축)</b> — 자원 보유 <b>상한이 없습니다</b>. 100%를 넘기면 게이지가 금빛(예산)·보랏빛(정치)으로 흐르는 「과충전」 상태가 돼요. 예산은 <b>후반 메가프로젝트 몰빵용 실탄</b>, 정치는 <b>임기 심사를 버티는 여론 버퍼</b>로 쓰입니다. (부족할 때만 붉은 경고)
+              <b class="text-amber-200">⚡ 오버차지 (상한 초과 비축)</b> — 자원 보유 <b>상한이 없습니다</b>. 100%를 넘기면 게이지가 금빛(예산)·보랏빛(정치)으로 흐르는 「과충전」이 돼요. 예산은 <b>후반 몰빵용 실탄</b>, 정치는 <b>임기 심사 버퍼</b>. (부족할 때만 붉은 경고)
             </div>
-            <div class="text-slate-500">💡 두 모드 모두 벼랑 끝 탈출용 <b>비상대책(판당 1회)</b>이 숨어 있습니다.</div>
+            <div class="text-slate-500">💡 두 모드 모두 벼랑 끝 탈출용 <b>비상대책(판당 1회)</b>이 숨어 있습니다. · 도전/하드코어는 생태(기온·해수면) 중심입니다.</div>
           </div>
         </details>
         ${dailyHTML}
