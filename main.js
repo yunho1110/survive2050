@@ -1099,13 +1099,13 @@ function govPersona(h){
   const best=h.filter(x=>x.baseScore>=20).length, worst=h.filter(x=>x.baseScore<8).length;
   const gam=h.filter(x=>x.gambled).length;
   const has=f=>h.some(x=>x.flag===f);
-  if(has('great_transition'))      return { emoji:'🌅', name:'인류세를 끝낸 선구자', tag:'THE GREAT TRANSITION' };
-  if(gam>=3)                       return { emoji:'🎲', name:'벼랑 끝의 승부사',     tag:'THE HIGH ROLLER' };
-  if(best>=7)                      return { emoji:'🌱', name:'이상주의 통치자',       tag:'THE IDEALIST' };
-  if(worst>=5)                     return { emoji:'🏭', name:'냉혹한 실리주의자',     tag:'THE PRAGMATIST' };
-  if(has('coal_on')||has('denial'))return { emoji:'🌫️', name:'타협의 생존가',        tag:'THE SURVIVOR' };
-  if(best>=worst)                  return { emoji:'⚖️', name:'줄타기의 균형감각',     tag:'THE TIGHTROPE' };
-  return                                  { emoji:'🧭', name:'표류하는 관리자',       tag:'THE DRIFTER' };
+  if(has('great_transition'))      return { emoji:'🌅', name:tx('인류세를 끝낸 선구자'), tag:'THE GREAT TRANSITION' };
+  if(gam>=3)                       return { emoji:'🎲', name:tx('벼랑 끝의 승부사'),     tag:'THE HIGH ROLLER' };
+  if(best>=7)                      return { emoji:'🌱', name:tx('이상주의 통치자'),       tag:'THE IDEALIST' };
+  if(worst>=5)                     return { emoji:'🏭', name:tx('냉혹한 실리주의자'),     tag:'THE PRAGMATIST' };
+  if(has('coal_on')||has('denial'))return { emoji:'🌫️', name:tx('타협의 생존가'),        tag:'THE SURVIVOR' };
+  if(best>=worst)                  return { emoji:'⚖️', name:tx('줄타기의 균형감각'),     tag:'THE TIGHTROPE' };
+  return                                  { emoji:'🧭', name:tx('표류하는 관리자'),       tag:'THE DRIFTER' };
 }
 /* 영수증 데이터(HTML·PNG 공용) */
 function buildReceipt(){
@@ -1131,44 +1131,47 @@ function receiptCardHTML(result){
   const sgn=v=> (Math.abs(v)<0.005?'±0':(v>0?'+':'')+(Math.abs(v)<1?v.toFixed(2):Math.round(v)));
   const row=(l,v,b)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;${b?'font-weight:700':''}"><span>${l}</span><span style="text-align:right">${v}</span></div>`;
   const dash=`<div style="border-top:1px dashed #c2b9a3;margin:8px 0"></div>`;
+  const EN=(window.LANG==='en');
+  const recWL = R.gam ? (R.gw+(EN?'W ':'승 ')+(R.gam-R.gw)+(EN?'L':'패')) : tx('없음');
+  const diffLine = tx('난이도')+' '+R.d.emoji+' '+t('diff_label_'+R.d.key)+' · '+R.date;
   return `
   <div id="receiptCard" class="relative w-full max-w-[400px] my-auto flex-col rounded-[20px] overflow-hidden animate-pop"
        style="display:none; aspect-ratio:9/16; max-height:calc(100dvh - 24px); background:#0b1020; border:1px solid ${color}55; box-shadow:0 30px 80px -20px ${color}66;">
     <div style="flex:1; min-height:0; overflow-y:auto; padding:16px;">
       <div id="receiptPaper" style="color-scheme:light; forced-color-adjust:none; font-family:'Courier New',ui-monospace,monospace; background:#f5f1e6; color:#23201a; border-radius:10px; padding:18px 16px; box-shadow:0 12px 30px -10px rgba(0,0,0,.6);">
         <div style="text-align:center; letter-spacing:.18em; font-weight:700; font-size:15px;">★ SURVIVE 2050 ★</div>
-        <div style="text-align:center; font-size:11px; margin-top:2px;">통치 결산 영수증 · GOVERNANCE RECEIPT</div>
-        <div style="text-align:center; font-size:10px; color:#6b6453; margin-top:4px;">난이도 ${R.d.emoji} ${R.d.label} · ${R.date}</div>
+        <div style="text-align:center; font-size:11px; margin-top:2px;">${tx('통치 결산 영수증 · GOVERNANCE RECEIPT')}</div>
+        <div style="text-align:center; font-size:10px; color:#6b6453; margin-top:4px;">${diffLine}</div>
         ${dash}
-        ${row('통치 스타일', R.persona.emoji+' '+R.persona.name, true)}
+        ${row(tx('통치 스타일'), R.persona.emoji+' '+R.persona.name, true)}
         <div style="text-align:right; font-size:9px; letter-spacing:.18em; color:#8a8270;">— ${R.persona.tag} —</div>
-        ${row('최애 목표', R.topSdg ? ('SDG '+R.topSdg+' '+R.sdgName) : '—')}
+        ${row(tx('최애 목표'), R.topSdg ? ('SDG '+R.topSdg+' '+R.sdgName) : '—')}
         ${dash}
-        ${row('🟢 최선의 결단', '× '+R.g)}
-        ${row('🟡 절충의 선택', '× '+R.y)}
-        ${row('🟠 아쉬운 균형', '× '+R.o)}
-        ${row('🔴 값비싼 선택', '× '+R.rd)}
-        ${row('🎲 도박 전적', R.gam ? (R.gw+'승 '+(R.gam-R.gw)+'패') : '없음')}
+        ${row(tx('🟢 최선의 결단'), '× '+R.g)}
+        ${row(tx('🟡 절충의 선택'), '× '+R.y)}
+        ${row(tx('🟠 아쉬운 균형'), '× '+R.o)}
+        ${row(tx('🔴 값비싼 선택'), '× '+R.rd)}
+        ${row(tx('🎲 도박 전적'), recWL)}
         ${dash}
-        ${row('🌡️ 기온', START.temp.toFixed(2)+' → '+s.temp.toFixed(2)+'°C  ('+sgn(s.temp-START.temp)+')')}
-        ${row('🌊 해수면', Math.round(START.sea)+' → '+Math.round(s.sea)+'cm  ('+sgn(s.sea-START.sea)+')')}
-        ${row('🌱 생태계', Math.round(START.eco)+' → '+Math.round(s.eco)+'%  ('+sgn(s.eco-START.eco)+')')}
+        ${row(tx('🌡️ 기온'), START.temp.toFixed(2)+' → '+s.temp.toFixed(2)+'°C  ('+sgn(s.temp-START.temp)+')')}
+        ${row(tx('🌊 해수면'), Math.round(START.sea)+' → '+Math.round(s.sea)+'cm  ('+sgn(s.sea-START.sea)+')')}
+        ${row(tx('🌱 생태계'), Math.round(START.eco)+' → '+Math.round(s.eco)+'%  ('+sgn(s.eco-START.eco)+')')}
         ${dash}
-        <div style="font-size:10px; color:#6b6453;">시그니처 정책</div>
+        <div style="font-size:10px; color:#6b6453;">${tx('시그니처 정책')}</div>
         <div style="font-weight:700; font-size:12px; margin-top:2px;">"${R.sigText}"</div>
         ${dash}
-        ${row('최종 등급', result.grade, true)}
-        ${row('지속가능성', R.scorePct+'% · '+s.score+'점', true)}
+        ${row(tx('최종 등급'), result.grade, true)}
+        ${row(tx('지속가능성'), t('end_pts',{p:R.scorePct,s:s.score}), true)}
         <div style="border-top:2px solid #23201a;margin:9px 0"></div>
         <div style="height:34px;background:repeating-linear-gradient(90deg,#23201a 0 2px,transparent 2px 4px,#23201a 4px 5px,transparent 5px 9px);margin:4px 0;"></div>
-        <div style="text-align:center;font-size:10px;letter-spacing:.04em;">#2050지구생존  #순천대  #지구통제실</div>
-        <div style="text-align:center;font-size:11px;margin-top:8px;color:#6b6453;">고객님의 지구를 이용해 주셔서<br/>감사합니다 🌍</div>
+        <div style="text-align:center;font-size:10px;letter-spacing:.04em;">${t('hashtags')}</div>
+        <div style="text-align:center;font-size:11px;margin-top:8px;color:#6b6453;">${tx('고객님의 지구를 이용해 주셔서')}<br/>${tx('감사합니다 🌍')}</div>
       </div>
     </div>
     <div class="shrink-0" style="padding:0 14px 16px;">
       <div class="grid grid-cols-2 gap-2">
-        <button onclick="shareReceipt()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">📸 영수증 저장</button>
-        <button onclick="toggleReceipt(false)" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">← 결과 카드</button>
+        <button onclick="shareReceipt()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">${tx('📸 영수증 저장')}</button>
+        <button onclick="toggleReceipt(false)" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">${tx('← 결과 카드')}</button>
       </div>
     </div>
   </div>`;
@@ -1196,27 +1199,29 @@ async function buildReceiptBlob(result){
   const rowC=(l,v,bold)=>{ ctx.fillStyle='#23201a'; ctx.font=(bold?'700 ':'')+30+'px '+F; ctx.textAlign='left'; ctx.fillText(l,M,y); ctx.textAlign='right'; ctx.fillText(v,W-M,y); y+=44; };
   const dash=()=>{ ctx.strokeStyle='#c2b9a3'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(M,y-16); ctx.lineTo(W-M,y-16); ctx.stroke(); ctx.setLineDash([]); y+=12; };
   const sgn=v=>(v>0?'+':'')+(Math.abs(v)<1?v.toFixed(2):Math.round(v));
+  const EN=(window.LANG==='en');
+  const recWL = R.gam?(R.gw+(EN?'W ':'승 ')+(R.gam-R.gw)+(EN?'L':'패')):tx('없음');
   line('★ SURVIVE 2050 ★',36,'#23201a','center',true); y+=46;
-  line('통치 결산 영수증 · GOVERNANCE RECEIPT',22,'#23201a','center'); y+=36;
-  line('난이도 '+R.d.emoji+' '+R.d.label+' · '+R.date,20,'#6b6453','center'); y+=40; dash();
-  rowC('통치 스타일', R.persona.emoji+' '+R.persona.name, true);
+  line(tx('통치 결산 영수증 · GOVERNANCE RECEIPT'),22,'#23201a','center'); y+=36;
+  line(tx('난이도')+' '+R.d.emoji+' '+t('diff_label_'+R.d.key)+' · '+R.date,20,'#6b6453','center'); y+=40; dash();
+  rowC(tx('통치 스타일'), R.persona.emoji+' '+R.persona.name, true);
   line('— '+R.persona.tag+' —',18,'#8a8270','right'); y+=36;
-  rowC('최애 목표', R.topSdg?('SDG '+R.topSdg):'—'); dash();
-  rowC('🟢 최선의 결단','× '+R.g); rowC('🟡 절충의 선택','× '+R.y); rowC('🟠 아쉬운 균형','× '+R.o); rowC('🔴 값비싼 선택','× '+R.rd);
-  rowC('🎲 도박 전적', R.gam?(R.gw+'승 '+(R.gam-R.gw)+'패'):'없음'); dash();
-  rowC('🌡️ 기온', START.temp.toFixed(2)+'→'+s.temp.toFixed(2)+'°C ('+sgn(s.temp-START.temp)+')');
-  rowC('🌊 해수면', Math.round(START.sea)+'→'+Math.round(s.sea)+' ('+sgn(s.sea-START.sea)+')');
-  rowC('🌱 생태계', Math.round(START.eco)+'→'+Math.round(s.eco)+'% ('+sgn(s.eco-START.eco)+')'); dash();
-  line('시그니처 정책',20,'#6b6453','left'); y+=36;
+  rowC(tx('최애 목표'), R.topSdg?('SDG '+R.topSdg):'—'); dash();
+  rowC(tx('🟢 최선의 결단'),'× '+R.g); rowC(tx('🟡 절충의 선택'),'× '+R.y); rowC(tx('🟠 아쉬운 균형'),'× '+R.o); rowC(tx('🔴 값비싼 선택'),'× '+R.rd);
+  rowC(tx('🎲 도박 전적'), recWL); dash();
+  rowC(tx('🌡️ 기온'), START.temp.toFixed(2)+'→'+s.temp.toFixed(2)+'°C ('+sgn(s.temp-START.temp)+')');
+  rowC(tx('🌊 해수면'), Math.round(START.sea)+'→'+Math.round(s.sea)+' ('+sgn(s.sea-START.sea)+')');
+  rowC(tx('🌱 생태계'), Math.round(START.eco)+'→'+Math.round(s.eco)+'% ('+sgn(s.eco-START.eco)+')'); dash();
+  line(tx('시그니처 정책'),20,'#6b6453','left'); y+=36;
   wrapChars(ctx,'"'+R.sigText+'"',W-2*M,2).forEach(t=>{ line(t,28,'#23201a','left',true); y+=38; });
   dash();
-  rowC('최종 등급', result.grade, true);
-  rowC('지속가능성', R.scorePct+'% · '+s.score+'점', true);
+  rowC(tx('최종 등급'), result.grade, true);
+  rowC(tx('지속가능성'), t('end_pts',{p:R.scorePct,s:s.score}), true);
   ctx.strokeStyle='#23201a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(M,y-8); ctx.lineTo(W-M,y-8); ctx.stroke(); y+=18;
   for(let x=M; x<W-M; ){ const w=2+Math.floor(Math.random()*5); ctx.fillStyle='#23201a'; ctx.fillRect(x,y,w,46); x+=w+2+Math.floor(Math.random()*5); } y+=86;
-  line('#2050지구생존   #순천대',20,'#23201a','center'); y+=40;
-  line('고객님의 지구를 이용해 주셔서',20,'#6b6453','center'); y+=30;
-  line('감사합니다 🌍',22,'#6b6453','center');
+  line(t('hashtags'),20,'#23201a','center'); y+=40;
+  line(tx('고객님의 지구를 이용해 주셔서'),20,'#6b6453','center'); y+=30;
+  line(tx('감사합니다 🌍'),22,'#6b6453','center');
   return await new Promise(res=>cv.toBlob(res,'image/png',0.95));
 }
 async function shareReceipt(){
@@ -1390,7 +1395,7 @@ async function buildShareBlob(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
   let y=128;
   ctx.fillStyle='#cbd5e1'; ctx.font='700 30px '+F; ctx.fillText('SURVIVE 2050 · FINAL REPORT', cx, y); y+=46;
-  ctx.fillStyle='#94a3b8'; ctx.font='600 26px '+F; ctx.fillText('난이도 '+diffCfg().emoji+' '+diffCfg().label, cx, y); y+=64;
+  ctx.fillStyle='#94a3b8'; ctx.font='600 26px '+F; ctx.fillText(tx('난이도')+' '+diffCfg().emoji+' '+t('diff_label_'+diffCfg().key), cx, y); y+=64;
 
   // 등급 원형 배지
   const r=88, ccy=y+r;
@@ -1398,7 +1403,7 @@ async function buildShareBlob(){
   ctx.fillStyle = lum(color)<0.55 ? '#ffffff' : '#05060e';
   ctx.font='900 104px '+F; ctx.textBaseline='middle'; ctx.fillText(result.grade, cx, ccy+6); ctx.textBaseline='alphabetic';
   y=ccy+r+50;
-  ctx.fillStyle=color; ctx.font='700 26px '+F; ctx.fillText('최종 등급', cx, y); y+=54;
+  ctx.fillStyle=color; ctx.font='700 26px '+F; ctx.fillText(tx('최종 등급'), cx, y); y+=54;
 
   // 엔딩 타이틀(최대 2줄)
   ctx.fillStyle='#ffffff'; ctx.font='900 48px '+F;
@@ -1414,10 +1419,10 @@ async function buildShareBlob(){
   y+=panelH+30;
 
   // 지표 칩 2×2
-  const chips=[ ['🌡️ 평균 기온','+'+s.temp.toFixed(2)+'°C','#f87171'],
-               ['🌊 글로벌 해수면','+'+Math.round(s.sea)+'cm','#22d3ee'],
-               ['🌱 대자연 생태', Math.round(s.eco)+'%','#34d399'],
-               ['🏆 지속가능성', scorePct+'% · '+s.score+'점','#fbbf24'] ];
+  const chips=[ ['🌡️ '+t('chip_temp'),'+'+s.temp.toFixed(2)+'°C','#f87171'],
+               ['🌊 '+t('chip_sea'),'+'+Math.round(s.sea)+'cm','#22d3ee'],
+               ['🌱 '+t('chip_eco'), Math.round(s.eco)+'%','#34d399'],
+               ['🏆 '+t('chip_sus'), t('end_pts',{p:scorePct,s:s.score}),'#fbbf24'] ];
   const gap=20, cw=(panelW-gap)/2, chH=112;
   ctx.textAlign='left';
   chips.forEach((c,i)=>{
@@ -1429,7 +1434,7 @@ async function buildShareBlob(){
   y+=2*chH+gap+38;
 
   // SDGs 엔딩 성적표
-  ctx.fillStyle='#e2e8f0'; ctx.font='700 28px '+F; ctx.fillText('🎓 SDGs 엔딩 성적표', padX, y); y+=40;
+  ctx.fillStyle='#e2e8f0'; ctx.font='700 28px '+F; ctx.fillText(t('report_title'), padX, y); y+=40;
   const rows=(history||[]).slice(0,10), rowH=52;
   rows.forEach(l=>{
     const m=SDG[l.sdg]||{name:'SDGs',color:'#64748b'};
@@ -1438,17 +1443,17 @@ async function buildShareBlob(){
     ctx.fillStyle=m.color; rrect(ctx,padX+12,y+6,32,32,8); ctx.fill();
     ctx.fillStyle='#fff'; ctx.font='800 19px '+F; ctx.textAlign='center'; ctx.fillText(String(l.sdg), padX+28, y+28); ctx.textAlign='left';
     ctx.fillStyle='#e2e8f0'; ctx.font='700 25px '+F;
-    let full=(l.step+1)+'단계 · '+l.choice, txt=full;
+    let full=t('report_sub',{s:l.step+1,name:l.choice}), txt=full;
     if(ctx.measureText(txt).width>panelW-150){ while(ctx.measureText(txt+'…').width>panelW-150 && txt.length>4) txt=txt.slice(0,-1); txt+='…'; }
     ctx.fillText(txt, padX+58, y+32);
     ctx.textAlign='right'; ctx.font='26px '+F; ctx.fillStyle='#fff'; ctx.fillText(mark, padX+panelW-16, y+32); ctx.textAlign='left';
     y+=rowH;
   });
-  if(!rows.length){ ctx.fillStyle='#94a3b8'; ctx.font='400 26px '+F; ctx.fillText('조기 종료로 기록이 부족합니다.', padX, y+30); }
+  if(!rows.length){ ctx.fillStyle='#94a3b8'; ctx.font='400 26px '+F; ctx.fillText(t('report_empty'), padX, y+30); }
 
   // 푸터 해시태그
   ctx.textAlign='center'; ctx.fillStyle=hexA(color,0.92); ctx.font='700 26px '+F;
-  ctx.fillText('#순천대  #SDGs  #지구통제실  #2050지구생존', cx, H-70);
+  ctx.fillText(t('hashtags'), cx, H-70);
 
   return await new Promise(res=> cv.toBlob(res,'image/png',0.95));
 }
@@ -1700,7 +1705,7 @@ function syncHUD(){
 /* ═══════════════ 부팅 ═══════════════ */
 /* ── 본문(데이터) 번역: 한국어 원문 → 영어. data.en.js + 그룹별 맵을 병합해 치환, 없으면 한국어 유지 ── */
 function txMap(){ return window.__TXM || (window.__TXM = Object.assign({},
-  window.TX_EN, window.TX_EN_early, window.TX_EN_mid, window.TX_EN_late, window.TX_EN_final)); }
+  window.TX_EN, window.TX_EN_early, window.TX_EN_mid, window.TX_EN_late, window.TX_EN_final, window.TX_EN_chrome)); }
 function tx(s){ return (window.LANG==='en') ? (txMap()[s] || s) : s; }
 /* data.js의 문자열을 「제자리(in-place)」로 치환 — 숫자·fx·flag·구조는 절대 건드리지 않음. 부팅 시 1회. */
 function localizeData(){
@@ -1715,6 +1720,9 @@ function localizeData(){
     (window.ECHOES||[]).forEach(e=>{ if(e.text && M[e.text]) e.text = M[e.text]; });
     Object.values(ENDING_DEX||{}).forEach(d=>{ if(d.name && M[d.name]) d.name = M[d.name]; });
     Object.keys(SDG||{}).forEach(k=>{ if(SDG[k].name && M[SDG[k].name]) SDG[k].name = M[SDG[k].name]; });
+    // 인게임 크롬(객체형): 돌발이벤트·업적 텍스트를 제자리 치환
+    (typeof EVENTS!=='undefined'?EVENTS:[]).forEach(e=>{ ['name','desc','flavor'].forEach(sw(e)); });
+    if(typeof ACH_META!=='undefined') Object.values(ACH_META).forEach(a=>{ ['name','desc'].forEach(sw(a)); });
   }catch(e){}
 }
 
