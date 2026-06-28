@@ -197,12 +197,12 @@ function toggleSound(){
   soundEnabled = !soundEnabled;
   const btn = document.getElementById('soundBtn');
   if(soundEnabled){
-    btn.innerText = '🔊 소리 켜짐';
+    btn.innerText = t('sound_on');
     btn.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500 text-slate-950 active:scale-95 transition shadow-lg';
     initAudio(); startAmbientBGM();
     playChordSynth([523.25,659.25],'sine',0.3,0.05);
   } else {
-    btn.innerText = '🔇 소리 꺼짐';
+    btn.innerText = t('sound_off');
     btn.className = 'px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition';
     if(bgmInterval) clearInterval(bgmInterval);
     currentOscillators.forEach(o=>{ try{ o.stop(); }catch(e){} });
@@ -1501,14 +1501,14 @@ function screenIntro(){
     const on = dd.key === currentDiff;
     return `<button onclick="selectDiff('${dd.key}')" class="rounded-xl p-2 text-center border transition active:scale-95 ${on?'bg-emerald-500/20 border-emerald-400 text-emerald-100':'bg-white/5 border-white/10 text-slate-400'}">
         <div class="text-base leading-none">${dd.emoji}</div>
-        <div class="text-[11px] font-bold mt-1">${dd.label}</div>
+        <div class="text-[11px] font-bold mt-1">${t('diff_label_'+dd.key)}</div>
       </button>`;
   }).join('');
 
   // 🗓️ 데일리 챌린지 토글(날짜 시드 → 모두가 같은 판)
   const dailyHTML = `<button onclick="toggleDaily()" class="w-full rounded-xl p-2 mb-4 text-center border transition active:scale-95 ${dailyMode?'bg-sky-500/20 border-sky-400 text-sky-100':'bg-white/5 border-white/10 text-slate-400'}">
-      <span class="text-xs font-bold">🗓️ 오늘의 지구 (데일리 챌린지) ${dailyMode?'· ON':'· OFF'}</span>
-      <div class="text-[10px] opacity-80 mt-0.5">${dailyMode?'오늘 날짜로 고정된 같은 판 — 친구와 점수를 겨뤄보세요':'켜면 전 세계가 같은 시나리오로 경쟁합니다'}</div>
+      <span class="text-xs font-bold">${dailyMode?t('daily_on'):t('daily_off')}</span>
+      <div class="text-[10px] opacity-80 mt-0.5">${dailyMode?t('daily_desc_on'):t('daily_desc_off')}</div>
     </button>`;
 
   // 🎬 엔딩 도감(발견/미발견 실루엣)
@@ -1552,34 +1552,34 @@ function screenIntro(){
         <div class="hero-title-wrap">
           <div class="hero-yr">CLIMATE CONTROL · YEAR</div>
           <div class="hero-2050">2050</div>
-          <div class="hero-kr">멸망 직전 지구에서 살아남기</div>
+          <div class="hero-kr">${t('hero_tagline')}</div>
         </div>
       </div>
 
       <div class="glass-main p-5 rounded-2xl shadow-xl">
-        <p class="text-xs text-slate-400 text-center mb-3">UN SDGs 기반 기후 통제 시뮬레이션 · 총 ${TOTAL_STAGES}단계의 결단</p>
+        <p class="text-xs text-slate-400 text-center mb-3">${t('intro_sub',{n:TOTAL_STAGES})}</p>
 
         <!-- 📖 핵심 루프 안내(항상 노출) — 처음 온 사람도 목표를 알게 -->
         <div class="rounded-xl bg-white/5 border border-white/10 p-3 mb-4 text-left">
-          <div class="text-[11px] font-bold text-emerald-300 mb-1">📖 어떻게 작동하나</div>
-          <p class="text-[10px] text-slate-300 leading-relaxed">매 턴 기후 위기를 읽고 <b>4개 정책 중 하나</b>를 고릅니다. 아래 <b>세 지표</b>를 관리해 <b>10단계</b> 뒤 <b>12개 엔딩</b> 중 하나에 도달해요. 선택 직후 결과 화면이 🟢최선~🔴값비싼 <b>판정과 수치 변화</b>를 바로 알려줍니다.</p>
+          <div class="text-[11px] font-bold text-emerald-300 mb-1">${t('howto_title')}</div>
+          <p class="text-[10px] text-slate-300 leading-relaxed">${t('howto_body')}</p>
           <div class="grid grid-cols-3 gap-1.5 mt-2 text-[9px] font-bold">
-            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌡️ 기온<br/><span class="text-emerald-300">낮을수록 좋음</span></div>
-            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌊 해수면<br/><span class="text-emerald-300">낮을수록 좋음</span></div>
-            <div class="rounded-lg bg-black/25 p-1.5 text-center">🌱 생태계<br/><span class="text-emerald-300">높을수록 좋음</span></div>
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">${t('dir_temp')}<br/><span class="text-emerald-300">${t('dir_low')}</span></div>
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">${t('dir_sea')}<br/><span class="text-emerald-300">${t('dir_low')}</span></div>
+            <div class="rounded-lg bg-black/25 p-1.5 text-center">${t('dir_eco')}<br/><span class="text-emerald-300">${t('dir_high')}</span></div>
           </div>
-          <p class="text-[9px] text-amber-300/80 mt-2">🌍 <b>글로벌 자원 압박</b>: 매 턴 기본으로 기온↑·생태↓가 누적됩니다(후반 가속). 좋은 선택으로 <b>적극 상쇄</b>해야 살아남아요.</p>
+          <p class="text-[9px] text-amber-300/80 mt-2">${t('gravity_intro')}</p>
         </div>
 
-        <div class="mb-1.5 text-[11px] font-bold text-slate-300 text-left">⚙️ 난이도 선택</div>
+        <div class="mb-1.5 text-[11px] font-bold text-slate-300 text-left">${t('diff_select')}</div>
         <div class="grid grid-cols-4 gap-2 mb-1.5">${diffHTML}</div>
-        <p class="text-[10px] text-slate-400 leading-relaxed mb-3 min-h-[26px]">${diffCfg().note}</p>
+        <p class="text-[10px] text-slate-400 leading-relaxed mb-3 min-h-[26px]">${t('note_'+currentDiff)}</p>
 
         <!-- 🪙 특수 모드 + 오버차지 가이드(접이식, JS 불필요) -->
         <details class="mb-3 rounded-xl bg-white/5 border border-white/10 overflow-hidden">
           <summary class="cursor-pointer select-none list-none px-3 py-2.5 text-[11px] font-bold text-slate-200 flex items-center justify-between gap-2">
-            <span>🪙 예산·정치 모드 가이드</span>
-            <span class="text-slate-500 text-[10px] shrink-0">자세히 ▾</span>
+            <span>${t('guide_summary')}</span>
+            <span class="text-slate-500 text-[10px] shrink-0">${t('guide_more')} ▾</span>
           </summary>
           <div class="px-3 pb-3 pt-1 space-y-2 text-[10px] leading-relaxed text-slate-300">
             <div><b class="text-amber-300">💰 예산 모드</b> (경제·산업 / SDG 8·9·12) — 매 턴 <b>2개 소비 / 2개 자금 확보(환급)</b>로 갈립니다. 남긴 예산엔 복리 이자(+8%)가 붙지만, <b>기온 1.5°C 초과분</b>만큼 재난 복구비가 차압돼요. 철강·공급망·탄소국경세 같은 <b>일자리 트레이드오프</b> 시나리오가 등장합니다.</div>
@@ -1593,17 +1593,17 @@ function screenIntro(){
         ${dailyHTML}
 
         <button id="startBtn" class="glow-pulse w-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black py-3.5 text-sm active:scale-95 transition shadow-xl mb-2.5">
-          ▶ 통제실 입장 (새 게임)
+          ${t('start_new')}
         </button>
-        ${hasSave?`<button id="resumeBtn" class="w-full rounded-full glass-soft border border-white/10 text-slate-200 font-bold py-3 text-sm active:scale-95 transition mb-5">💾 이어하기</button>`:'<div class="mb-5"></div>'}
+        ${hasSave?`<button id="resumeBtn" class="w-full rounded-full glass-soft border border-white/10 text-slate-200 font-bold py-3 text-sm active:scale-95 transition mb-5">${t('resume')}</button>`:'<div class="mb-5"></div>'}
 
         <div class="border-t border-white/5 pt-4">
-          <div class="text-xs font-bold text-slate-400 text-left mb-2">🏆 영구 업적 진열장 (${earned.length}/${Object.keys(ACH_META).length})</div>
+          <div class="text-xs font-bold text-slate-400 text-left mb-2">${t('ach_title')} (${earned.length}/${Object.keys(ACH_META).length})</div>
           <div class="grid grid-cols-5 gap-1.5">${badgeHTML}</div>
         </div>
 
         <div class="border-t border-white/5 pt-4 mt-4">
-          <div class="text-xs font-bold text-slate-400 text-left mb-2">🎬 엔딩 도감 (${seenEnd.length}/${Object.keys(ENDING_DEX).length})</div>
+          <div class="text-xs font-bold text-slate-400 text-left mb-2">${t('dex_title')} (${seenEnd.length}/${Object.keys(ENDING_DEX).length})</div>
           <div class="grid grid-cols-4 gap-1.5">${dexHTML}</div>
         </div>
       </div>
@@ -1696,8 +1696,18 @@ function syncHUD(){
 }
 
 /* ═══════════════ 부팅 ═══════════════ */
+/* 헤더 등 정적 크롬을 현재 언어로 세팅(인트로/게임 공통) */
+function applyChrome(){
+  const set=(id,key)=>{ const el=document.getElementById(id); if(el) el.innerText=t(key); };
+  set('roomTitle','room_title'); set('lblTemp','stat_temp_label'); set('lblSea','stat_sea_label'); set('lblEco','stat_eco_label');
+  const sb=document.getElementById('soundBtn'); if(sb) sb.innerText = soundEnabled ? t('sound_on') : t('sound_off');
+  const lb=document.getElementById('langBtn'); if(lb) lb.innerText = t('lang_btn');
+}
 function boot(){
   document.getElementById('soundBtn').onclick = toggleSound;
+  const lb=document.getElementById('langBtn'); if(lb) lb.onclick = window.cycleLang;
+  if(document.documentElement) document.documentElement.lang = window.LANG || 'ko';
+  applyChrome();
   syncHUD();
   screenIntro();
 }

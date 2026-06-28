@@ -240,26 +240,29 @@
         <div class="flex justify-between items-center border-b border-white/5 pb-2.5 mb-3">
           <div class="flex items-center gap-2">
             <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold tracking-wider">YEAR 2050</span>
-            <h1 class="font-display text-lg text-white">지구 통제실</h1>
+            <h1 id="roomTitle" class="font-display text-lg text-white">지구 통제실</h1>
           </div>
-          <button id="soundBtn" class="px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition">
-            🔇 소리 꺼짐
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button id="langBtn" class="px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition">🌐 EN</button>
+            <button id="soundBtn" class="px-2.5 py-1 text-xs font-bold rounded-lg glass-soft border border-white/10 text-slate-300 active:scale-95 transition">
+              🔇 소리 꺼짐
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-3 gap-2">
           <div class="rounded-xl bg-white/5 p-2.5 text-center">
-            <div class="text-[11px] text-slate-400">🌡️ 기온 상승</div>
+            <div id="lblTemp" class="text-[11px] text-slate-400">🌡️ 기온 상승</div>
             <div class="mt-0.5 font-extrabold text-red-400 text-lg leading-none">+<span id="vTemp">1.10</span>°C</div>
             <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bTemp" class="bar-fill h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-500" style="width:24%"></div></div>
           </div>
           <div class="rounded-xl bg-white/5 p-2.5 text-center">
-            <div class="text-[11px] text-slate-400">🌊 해수면</div>
+            <div id="lblSea" class="text-[11px] text-slate-400">🌊 해수면</div>
             <div class="mt-0.5 font-extrabold text-cyan-300 text-lg leading-none">+<span id="vSea">22</span>cm</div>
             <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bSea" class="bar-fill h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-600" style="width:18%"></div></div>
           </div>
           <div class="rounded-xl bg-white/5 p-2.5 text-center">
-            <div class="text-[11px] text-slate-400">🌱 생태계 건강</div>
+            <div id="lblEco" class="text-[11px] text-slate-400">🌱 생태계 건강</div>
             <div class="mt-0.5 font-extrabold text-emerald-300 text-lg leading-none"><span id="vEco">75</span>%</div>
             <div class="mt-1.5 h-1 w-full rounded-full bg-white/10 overflow-hidden"><div id="bEco" class="bar-fill h-full rounded-full bg-gradient-to-r from-lime-400 to-emerald-500" style="width:75%"></div></div>
           </div>
@@ -272,7 +275,8 @@
     <section id="stage" class="flex-1 flex flex-col justify-center py-4"></section>
   </div>
 
-  <script src="data.js?v=16"></script>
-  <script src="main.js?v=16"></script>
+  <script src="i18n.js?v=17"></script>
+  <script src="data.js?v=17"></script>
+  <script src="main.js?v=17"></script>
 </body>
 </html>
