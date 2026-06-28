@@ -206,31 +206,37 @@ function toggleSound(){
    · apply형    : 발동 즉시 자원(예산)·지지율을 직접 흔드는 충격(자원 모드 전용 향신료)
    필터: modes(난이도 한정) + cond(지표 임계 조건). 둘 다 통과한 것만 후보. */
 const EVENTS = [
-  /* ── 공통: 다음 선택 효과 증폭/완화(multiply) ── */
-  { name:'🔥 초대형 아마존 대화재',       desc:'이번 턴 생태계 타격이 1.6배 가속됩니다.', target:'eco',  multiply:1.6, type:'bad' },
-  { name:'🌊 슈퍼 엘니뇨 동시 발생',      desc:'이번 턴 기온 상승 타격이 1.8배 증폭됩니다.', target:'temp', multiply:1.8, type:'bad' },
-  { name:'🧊 북극 메탄 하이드레이트 대분출', desc:'이번 턴 모든 악영향이 1.5배 폭주합니다.', target:'all',  multiply:1.5, type:'bad' },
-  { name:'🌱 글로벌 녹색 보조금 타결',     desc:'이번 턴 생태 복원 정책 효율이 1.4배 향상됩니다.', target:'eco', multiply:1.4, type:'good' },
-  { name:'🛰️ 위성 조기경보 적중',         desc:'대비 태세 완비 — 이번 턴 기온 타격이 0.55배로 완화됩니다.', target:'temp', multiply:0.55, type:'good' },
-  { name:'✊ 청년 기후 총파업',            desc:'행동 압력 폭발 — 이번 턴 생태 복원 효율이 1.5배로 치솟습니다.', target:'eco', multiply:1.5, type:'good' },
+  /* ── 공통: 다음 선택 효과 증폭/완화(multiply) — 악재는 더 맵게, 호재는 절제 ── */
+  { name:'🔥 초대형 아마존 대화재',       desc:'이번 턴 생태계 타격이 1.85배 가속됩니다.', target:'eco',  multiply:1.85, type:'bad' },
+  { name:'🌊 슈퍼 엘니뇨 동시 발생',      desc:'이번 턴 기온 상승 타격이 2.0배 증폭됩니다.', target:'temp', multiply:2.0, type:'bad' },
+  { name:'🧊 북극 메탄 하이드레이트 대분출', desc:'이번 턴 모든 악영향이 1.8배 폭주합니다.', target:'all',  multiply:1.8, type:'bad' },
+  { name:'🌱 글로벌 녹색 보조금 타결',     desc:'이번 턴 생태 복원 효율이 1.3배 향상됩니다.', target:'eco', multiply:1.3, type:'good' },
+  { name:'🛰️ 위성 조기경보 적중',         desc:'이번 턴 기온 타격이 0.65배로 완화됩니다.', target:'temp', multiply:0.65, type:'good' },
+  { name:'✊ 청년 기후 총파업',            desc:'이번 턴 생태 복원 효율이 1.35배로 오릅니다.', target:'eco', multiply:1.35, type:'good' },
   /* ── 조건부: 지표 임계에서만 발동(긴장 가속/숨통) ── */
-  { name:'🌡️ 폭염 도미노', cond:G=>G.stats.temp>=2.2, desc:'임계 근접 — 이번 턴 기온 타격이 2.0배로 폭주합니다.', target:'temp', multiply:2.0, type:'bad' },
-  { name:'🩸 생태 티핑 경보', cond:G=>G.stats.eco<=35, desc:'붕괴 직전 — 이번 턴 생태계 타격이 1.8배로 가속됩니다.', target:'eco', multiply:1.8, type:'bad' },
-  { name:'❄️ 라니냐 한숨 돌리기', cond:G=>G.stats.temp<=1.40, desc:'잠깐의 냉각 — 이번 턴 기온 타격이 0.5배로 줄어듭니다.', target:'temp', multiply:0.5, type:'good' },
+  { name:'🌡️ 폭염 도미노', cond:G=>G.stats.temp>=2.0, desc:'임계 근접 — 이번 턴 기온 타격이 2.6배로 폭주합니다.', target:'temp', multiply:2.6, type:'bad' },
+  { name:'🕳️ 영구동토 메탄 폭발', cond:G=>G.stats.temp>=1.8, desc:'언 땅이 뒤집혔다 — 이번 턴 기온 타격이 2.8배로 치솟습니다.', target:'temp', multiply:2.8, type:'bad' },
+  { name:'🩸 생태 티핑 경보', cond:G=>G.stats.eco<=40, desc:'붕괴 직전 — 이번 턴 생태계 타격이 2.2배로 가속됩니다.', target:'eco', multiply:2.2, type:'bad' },
+  { name:'🌪️ 복합재난 동시타격', cond:G=>G.stats.eco>=60 && G.stats.temp<=1.7, desc:'방심한 사이 — 이번 턴 모든 악영향이 1.8배로 덮칩니다.', target:'all', multiply:1.8, type:'bad' },   // 꿀 빠는 유저 뒤통수
+  { name:'❄️ 라니냐 한숨 돌리기', cond:G=>G.stats.temp<=1.35, desc:'잠깐의 냉각 — 이번 턴 기온 타격이 0.6배로 줄어듭니다.', target:'temp', multiply:0.6, type:'good' },
   /* ── 💰 예산 모드 전용: 즉시 자원 충격(apply) ── */
   { name:'📈 그린본드 완판', modes:['BUDGET'], type:'good', flavor:'녹색 채권이 흥행하며 곳간이 두둑해졌다.',
-    apply:(g)=>{ const v=Math.round(Math.max(40, g.budgetTotal*0.12)); g.budget+=v; return `예산 +${v}억`; } },
-  { name:'🏦 긴급 기후기금 배정', modes:['BUDGET'], cond:G=>G.budget < G.budgetTotal*0.3, type:'good', flavor:'파산 직전, 국제 기후기금이 수혈됐다.',
-    apply:(g)=>{ const v=Math.round(g.budgetTotal*0.18); g.budget+=v; return `예산 +${v}억`; } },
+    apply:(g)=>{ const v=Math.round(Math.max(35, g.budgetTotal*0.10)); g.budget+=v; return `예산 +${v}억`; } },
+  { name:'🏦 긴급 기후기금 배정', modes:['BUDGET'], cond:G=>G.budget < G.budgetTotal*0.25, type:'good', flavor:'파산 직전, 국제 기후기금이 수혈됐다.',
+    apply:(g)=>{ const v=Math.round(g.budgetTotal*0.16); g.budget+=v; return `예산 +${v}억`; } },
   { name:'💸 탄소세 소송 패소', modes:['BUDGET'], cond:G=>G.budget>40, type:'bad', flavor:'배상 판결로 곳간이 뜯겼다.',
-    apply:(g)=>{ const v=Math.round(g.budget*0.15); g.budget=Math.max(0,g.budget-v); return `예산 -${v}억`; } },
+    apply:(g)=>{ const v=Math.round(g.budget*0.22); g.budget=Math.max(0,g.budget-v); return `예산 -${v}억`; } },
+  { name:'📉 그린버블 차익실현', modes:['BUDGET'], cond:G=>G.budget > G.budgetTotal, type:'bad', flavor:'과열된 곳간에 차익실현 매물이 쏟아졌다.',
+    apply:(g)=>{ const v=Math.round(g.budget*0.30); g.budget=Math.max(0,g.budget-v); return `예산 -${v}억`; } },   // 곳간 과대축적 뒤통수
   /* ── 🗳️ 정치 모드 전용: 즉시 여론 충격(apply) ── */
   { name:'📺 기후 다큐 신드롬', modes:['POLITICS'], type:'good', flavor:'온 국민이 다큐에 결집했다.',
-    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)+10,0,200); return '지지율 +10%'; } },
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)+8,0,200); return '지지율 +8%'; } },
   { name:'🗞️ 그린워싱 스캔들', modes:['POLITICS'], type:'bad', flavor:'위장 환경정책이 폭로됐다.',
-    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-12,0,200); return '지지율 -12%'; } },
-  { name:'🪧 거리 시위 격화', modes:['POLITICS'], cond:G=>G.stats.eco<50, type:'bad', flavor:'악화된 환경에 분노가 거리로 쏟아졌다.',
-    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-8,0,200); return '지지율 -8%'; } },
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-16,0,200); return '지지율 -16%'; } },
+  { name:'🚶 기후 난민 대이동', modes:['POLITICS'], cond:G=>G.stats.eco<55, type:'bad', flavor:'국경에 몰린 난민에 여론이 들끓는다.',
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-20,0,200); return '지지율 -20%'; } },
+  { name:'🫧 여론 거품 붕괴', modes:['POLITICS'], cond:G=>(G.approval||60)>100, type:'bad', flavor:'고공 지지율에 방심한 순간 역풍이 불었다.',
+    apply:(g)=>{ g.approval=clamp((typeof g.approval==='number'?g.approval:60)-22,0,200); return '지지율 -22%'; } },   // 지지율 과신 뒤통수
 ];
 /* 하위호환: 외부에서 MODIFIERS_POOL을 참조하던 코드 대비(별칭) */
 const MODIFIERS_POOL = EVENTS;
@@ -238,7 +244,7 @@ const MODIFIERS_POOL = EVENTS;
 function triggerRandomEvent(){
   const warn = document.getElementById('warn');
   G.modifier = null;
-  if(!(RNG() < 0.34 && G.currentStep > 0 && G.currentStep < TOTAL_STAGES - 1)){ if(warn) warn.className = 'hidden'; return; }
+  if(!(RNG() < 0.40 && G.currentStep > 0 && G.currentStep < TOTAL_STAGES - 1)){ if(warn) warn.className = 'hidden'; return; }
   // 현재 난이도·지표 조건을 통과한 이벤트만 후보로
   const pool = EVENTS.filter(e => (!e.modes || e.modes.includes(currentDiff)) && (!e.cond || e.cond(G)));
   if(!pool.length){ if(warn) warn.className = 'hidden'; return; }
@@ -416,6 +422,18 @@ function updateHeat(){
   layer.style.opacity = clamp((t - 1.1) / 2.4, 0, 0.6).toFixed(3);
 }
 
+/* ═══ 🌍 글로벌 자원 압박(Baseline Gravity) ═══
+   엔딩의 「문」(v13 도달성)은 그대로 열어두되, 거기로 가는 「길」을 험하게:
+   선택과 무관하게 매 턴 기온↑·생태↓가 기본으로 깔린다(후반 가속).
+   → 좋은 선택의 +로 상쇄 가능하므로 고수는 통과, 꿀 빠는 플레이어는 서서히 가라앉음. */
+const GRAVITY = { temp: 0.03, eco: 1.0, accel: 0.05 };
+function applyGravity(){
+  if(!G) return;
+  const k = 1 + G.currentStep * GRAVITY.accel;   // 후반일수록 가속(1.0 → ~1.45)
+  G.stats.temp = G.stats.temp + GRAVITY.temp * k;
+  G.stats.eco  = clamp(G.stats.eco - GRAVITY.eco * k, 0, 100);
+}
+
 let locking = false;
 function choose(choiceIdx){
   if(G.renderingHalted || locking) return;
@@ -499,6 +517,9 @@ function choose(choiceIdx){
     gambled: !!c.gamble, won: c.gamble ? rolledNote.includes('성공') : null,
   });
 
+  // 🌍 글로벌 자원 압박: 선택 효과 위에 매 턴 기본 악화를 누적(가는 길을 험하게) → 이번 턴 net에 포함
+  applyGravity();
+
   // 선택의 실제 결과 델타를 기록 → 피드백 화면에서 「이 선택이 좋았나/나빴나」를 명확히 보여줌
   c._delta = { temp:G.stats.temp - old.temp, sea:G.stats.sea - old.sea, eco:G.stats.eco - old.eco };
 
@@ -576,7 +597,7 @@ function resToast(msg, tone){
    대담한 친환경 규제일수록 단기 인기가 떨어지고, 인기영합(환경 포기)은 지지율이 오릅니다. */
 function approvalDelta(c){
   const s = c.fx.score;
-  if(s>=20) return -4;   // 최선(강한 규제) = 단기 인기 하락(−6→−4로 완화: 정공법 연타 시 임기 심사 통과 여지)
+  if(s>=20) return -5;   // 최선(강한 규제) = 단기 인기 하락(−5: 초중반 여론 눈치를 다시 빡세게)
   if(s>=10) return -2;
   if(s>=8)  return +1;   // 균형형 = 소폭 호감
   return +8;             // 환경 포기(인기영합) = 지지율 급등
@@ -651,8 +672,18 @@ function resourceTurnTick(){
   const d = diffCfg(); if(!d.budget || !G) return;
   if(d.politics){
     const ap = (typeof G.approval==='number') ? G.approval : 60;
-    const regen = Math.round((ap/100) * 80);                 // 지지율 높을수록(오버차지 포함) 충원↑ (60→80: 정공법 자본 회전 보강)
-    if(regen>0){ G.budget = G.budget + regen; resToast(`🗳️ 지지율 ${ap}% → 정치자본 +${regen}pt 충원`, 'sky'); }
+    // 정치 자본 충원(줬다 뺏기):
+    //  · 초중반(1~6단계): 지지율 비례로 「빠듯하게」 → 여론 눈치 + 곳간 압박(초반부터 배부르지 않게)
+    //  · 후반(7~10단계): 「정공법으로 점수를 쌓아온」 고수에게만 자본이 극적으로 복사 — 지지율과 분리
+    //    (강한 규제는 어차피 지지율을 깎으므로, 후반 보너스를 지지율에 묶으면 정공법이 자멸 → 점수 페이스로 보상)
+    let regen;
+    if(G.currentStep >= 6){
+      const pace = G.stats.score / Math.max(1, G.currentStep*20);   // 0~1: 지금까지 평균이 최선(20)에 가까운가
+      regen = pace>=0.80 ? 220 : pace>=0.60 ? 110 : 40;             // 정공법일수록 폭발적 회복(꿀 빤 유저는 미미 → S티어는 고수만)
+    } else {
+      regen = Math.round((ap/100) * 45);                            // 초중반은 빠듯하게
+    }
+    if(regen>0){ G.budget = G.budget + regen; resToast(`🗳️ 정치자본 +${regen}pt 충원 (지지율 ${ap}%)`, 'sky'); }
     const cut = reviewCut(G.currentStep);                     // 동적 커트라인
     if(cut!==null && ap < cut){
       const loss = Math.round(G.budget * 0.35);
@@ -960,6 +991,7 @@ function renderCurrentScenario(){
         <span>📋 통제 단계: ${G.currentStep+1} / ${TOTAL_STAGES}</span>
         <span class="text-red-400">위기 등급: TIER ${item.tier}</span>
       </div>
+      <div class="text-[9px] text-amber-300/60 mb-2">🌍 글로벌 자원 압박: 매 턴 기본으로 🌡️ 상승·🌱 감소가 누적됩니다 (후반 가속)</div>
       <h2 class="text-lg font-black text-white mb-2">${scene.title}</h2>
       ${voiceHTML}
       <p id="sceneText" class="text-xs text-slate-300 leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5 mb-4 min-h-[3.5rem]"></p>
@@ -1576,7 +1608,7 @@ function startGame(){
 function computeBudget(){
   let maxSpend = 0;
   G.gameQueue.forEach(it=>{ maxSpend += Math.max(...it.scene.choices.map(c=>costOf(c, it.tier))); });
-  const mult = diffCfg().politics ? 0.95 : 0.7;
+  const mult = 0.7;   // 정치도 예산과 동일하게 빠듯한 출발(0.95→0.7) — 초반부터 배부르지 않게
   return Math.round(maxSpend * mult / 10) * 10;
 }
 function restartGame(){
