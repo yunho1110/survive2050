@@ -1236,6 +1236,8 @@ async function shareReceipt(){
 
 /* ═══════════════ 8. 인스타 스토리 공유용 카드뉴스 엔딩(9:16) ═══════════════ */
 function renderEndingCard(result){
+  // 엔딩 제목/설명은 함수(ENDING_RULES)에서 나오므로 렌더 시점에 번역(EN, TX_EN에 있을 때)
+  if(window.LANG==='en' && window.TX_EN) result = Object.assign({}, result, { title: tx(result.title), desc: tx(result.desc) });
   if(G) G.renderingHalted = result.collapse ? true : G.renderingHalted;
   document.getElementById('warn').className = 'hidden';
   const root = document.getElementById('app-root');
@@ -1696,6 +1698,26 @@ function syncHUD(){
 }
 
 /* ═══════════════ 부팅 ═══════════════ */
+/* ── 본문(데이터) 번역: 한국어 원문 → 영어. data.en.js + 그룹별 맵을 병합해 치환, 없으면 한국어 유지 ── */
+function txMap(){ return window.__TXM || (window.__TXM = Object.assign({},
+  window.TX_EN, window.TX_EN_early, window.TX_EN_mid, window.TX_EN_late, window.TX_EN_final)); }
+function tx(s){ return (window.LANG==='en') ? (txMap()[s] || s) : s; }
+/* data.js의 문자열을 「제자리(in-place)」로 치환 — 숫자·fx·flag·구조는 절대 건드리지 않음. 부팅 시 1회. */
+function localizeData(){
+  if(window.LANG!=='en') return;
+  const M = txMap(), sw = o => k => { if(o[k] && M[o[k]]) o[k] = M[o[k]]; };
+  function tc(c){ ['label','tag','feedback','fact'].forEach(sw(c));
+    if(c.delay && c.delay.msg && M[c.delay.msg]) c.delay.msg = M[c.delay.msg];
+    if(c.gamble){ ['win','lose'].forEach(g=>{ if(c.gamble[g] && c.gamble[g].note && M[c.gamble[g].note]) c.gamble[g].note = M[c.gamble[g].note]; }); } }
+  try{
+    ['early','mid','late','final'].forEach(g=>(SCENARIOS[g]||[]).forEach(sc=>{ ['title','text','voice'].forEach(sw(sc)); (sc.choices||[]).forEach(tc); }));
+    Object.values(EXTRA_CHOICES||{}).forEach(tc);
+    (window.ECHOES||[]).forEach(e=>{ if(e.text && M[e.text]) e.text = M[e.text]; });
+    Object.values(ENDING_DEX||{}).forEach(d=>{ if(d.name && M[d.name]) d.name = M[d.name]; });
+    Object.keys(SDG||{}).forEach(k=>{ if(SDG[k].name && M[SDG[k].name]) SDG[k].name = M[SDG[k].name]; });
+  }catch(e){}
+}
+
 /* 헤더 등 정적 크롬을 현재 언어로 세팅(인트로/게임 공통) */
 function applyChrome(){
   const set=(id,key)=>{ const el=document.getElementById(id); if(el) el.innerText=t(key); };
@@ -1704,6 +1726,7 @@ function applyChrome(){
   const lb=document.getElementById('langBtn'); if(lb) lb.innerText = t('lang_btn');
 }
 function boot(){
+  localizeData();   // EN이면 data.js 문자열을 제자리 치환(부팅 시 1회) — 이후 모든 렌더가 영어로
   document.getElementById('soundBtn').onclick = toggleSound;
   const lb=document.getElementById('langBtn'); if(lb) lb.onclick = window.cycleLang;
   if(document.documentElement) document.documentElement.lang = window.LANG || 'ko';
