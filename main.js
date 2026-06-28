@@ -104,6 +104,15 @@ const SCENE_ART = {
   desal:       { motif:'🏝️', floats:['🌊','💧','☀️'], top:'#0b3344', bot:'#15607a', ring:'rgba(56,189,248,.5)' },
   circular:    { motif:'♻️', floats:['🔁','🔋','🌍'], top:'#10302a', bot:'#1e5045', ring:'rgba(45,212,191,.5)' },
   treaty:      { motif:'🌍', floats:['🤝','🕊️','📜'], top:'#0e2a4a', bot:'#1a4a7a', ring:'rgba(96,165,250,.55)' },
+  /* ─ 경제/산업(예산 모드 테마) ─ */
+  steel:       { motif:'🏭', floats:['🔥','🦺','⚙️'], top:'#2a1a14', bot:'#4a2e1e', ring:'rgba(251,146,60,.5)' },
+  jobs:        { motif:'🦺', floats:['🏗️','🔧','📉'], top:'#2a2410', bot:'#4a3e1e', ring:'rgba(250,204,21,.5)' },
+  tariff:      { motif:'🛃', floats:['💰','📦','🌍'], top:'#1a2a3a', bot:'#2a4055', ring:'rgba(96,165,250,.5)' },
+  /* ─ 사회/불평등(정치 모드 테마) ─ */
+  fueltax:     { motif:'⛽', floats:['🪧','🚗','💸'], top:'#2a1a1a', bot:'#4a2a2a', ring:'rgba(248,113,113,.5)' },
+  housing:     { motif:'🏚️', floats:['🔥','❄️','💡'], top:'#1a2233', bot:'#2e3a52', ring:'rgba(125,211,252,.5)' },
+  inflation:   { motif:'🛒', floats:['📈','🍞','💸'], top:'#2a2414', bot:'#4a3e22', ring:'rgba(221,166,58,.5)' },
+  justice:     { motif:'⚖️', floats:['🏛️','🕊️','📜'], top:'#1a1f3a', bot:'#2a325a', ring:'rgba(167,139,250,.5)' },
   default:     { motif:'🌍', floats:['🌱','🌊','☁️'], top:'#0b2545', bot:'#1d3461', ring:'rgba(52,211,153,.5)' },
 };
 
@@ -373,7 +382,10 @@ function shuffleInPlace(arr){
 function buildQueue(){
   const q = [];
   QUEUE_PLAN.forEach(({group,pick,tier})=>{
-    const pool = SCENARIOS[group] || [];
+    // 모드별 내러티브 테마 라우팅(수식·구조 불변, 후보 풀만 필터):
+    //   modes 미지정 = 전 모드 공통(생태 중심) · modes:['BUDGET'/'POLITICS'] = 해당 모드에서만 등장.
+    //   → 도전/하드코어는 기존 43개 그대로, 예산엔 경제, 정치엔 사회 딜레마가 섞여 들어온다.
+    const pool = (SCENARIOS[group] || []).filter(sc => !sc.modes || sc.modes.includes(currentDiff));
     sample(pool, pick).forEach(scene=>{
       // 3개 기본 보기 + 진짜 4번째 보기(EXTRA_CHOICES, 전 모드 공통) 합류
       let base = scene.choices.slice();
@@ -1123,7 +1135,7 @@ function receiptCardHTML(result){
   <div id="receiptCard" class="relative w-full max-w-[400px] my-auto flex-col rounded-[20px] overflow-hidden animate-pop"
        style="display:none; aspect-ratio:9/16; max-height:calc(100dvh - 24px); background:#0b1020; border:1px solid ${color}55; box-shadow:0 30px 80px -20px ${color}66;">
     <div style="flex:1; min-height:0; overflow-y:auto; padding:16px;">
-      <div style="font-family:'Courier New',ui-monospace,monospace; background:#f5f1e6; color:#23201a; border-radius:10px; padding:18px 16px; box-shadow:0 12px 30px -10px rgba(0,0,0,.6);">
+      <div id="receiptPaper" style="color-scheme:light; forced-color-adjust:none; font-family:'Courier New',ui-monospace,monospace; background:#f5f1e6; color:#23201a; border-radius:10px; padding:18px 16px; box-shadow:0 12px 30px -10px rgba(0,0,0,.6);">
         <div style="text-align:center; letter-spacing:.18em; font-weight:700; font-size:15px;">★ SURVIVE 2050 ★</div>
         <div style="text-align:center; font-size:11px; margin-top:2px;">통치 결산 영수증 · GOVERNANCE RECEIPT</div>
         <div style="text-align:center; font-size:10px; color:#6b6453; margin-top:4px;">난이도 ${R.d.emoji} ${R.d.label} · ${R.date}</div>
@@ -1172,9 +1184,12 @@ function toggleReceipt(show){
 async function buildReceiptBlob(result){
   try{ if(document.fonts && document.fonts.ready) await document.fonts.ready; }catch(e){}
   const R=buildReceipt(), s=R.s;
-  const W=760, H=1340, M=72, F="'Courier New', monospace";
-  const cv=document.createElement('canvas'); cv.width=W; cv.height=H; const ctx=cv.getContext('2d');
-  ctx.fillStyle='#0b1020'; ctx.fillRect(0,0,W,H);
+  const PW=760, M=72, F="'Courier New', monospace";
+  const OUT_W=1080, OUT_H=1920, k=OUT_W/PW;            // 정확한 9:16 스토리 규격 → 기종·노치 무관·크롭 0. 캔버스는 픽셀이라 시스템 다크모드 영향 없음
+  const cv=document.createElement('canvas'); cv.width=OUT_W; cv.height=OUT_H; const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0b1020'; ctx.fillRect(0,0,OUT_W,OUT_H);
+  ctx.scale(k,k);                                       // 이하 좌표는 760폭 「종이 공간」 기준
+  const W=PW, H=OUT_H/k;                                // W=760, H≈1351 (종이 공간) — 크림 종이를 9:16 정중앙에 배치
   ctx.fillStyle='#f5f1e6'; rrect(ctx,28,28,W-56,H-56,28); ctx.fill();
   let y=118;
   const line=(t,sz,col,al,bold)=>{ ctx.fillStyle=col||'#23201a'; ctx.font=(bold?'700 ':'')+sz+'px '+F; ctx.textAlign=al||'left'; ctx.fillText(t, al==='center'?W/2:(al==='right'?W-M:M), y); };

@@ -78,6 +78,17 @@
   summary::-webkit-details-marker{ display:none; }
   summary{ list-style:none; }
 
+  /* ═══ 감성 영수증: 시스템 다크모드/강제 색반전 방어 ═══
+     안드로이드 WebView의 「강제 다크」, iOS 자동 반전, 고대비(forced-colors)에서도
+     크림색 종이와 검은 글자가 그대로 유지되도록 강제 라이트 스코프 + 색반전 차단. */
+  #receiptPaper{
+    color-scheme: light;                 /* 이 서브트리만 라이트로 고정(루트는 dark) */
+    forced-color-adjust: none;           /* 고대비 모드 강제색 무시 */
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    background:#f5f1e6 !important; color:#23201a !important;
+  }
+  #receiptPaper *{ forced-color-adjust: none; }
+
   /* ─────────── 세이프 에어리어: 상단 헤더 + 토스트 ─────────── */
   #app-root{ padding-top: calc(1rem + var(--safe-top)); padding-bottom: calc(1rem + var(--safe-bot)); }
   .safe-toast{ bottom: calc(1.5rem + var(--safe-bot)); right: calc(1.5rem + var(--safe-right)); }
@@ -261,7 +272,7 @@
     <section id="stage" class="flex-1 flex flex-col justify-center py-4"></section>
   </div>
 
-  <script src="data.js?v=14"></script>
-  <script src="main.js?v=14"></script>
+  <script src="data.js?v=15"></script>
+  <script src="main.js?v=15"></script>
 </body>
 </html>
