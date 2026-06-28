@@ -39,8 +39,8 @@ let dailyMode = false;   // 🗓️ 오늘의 지구: 날짜 시드로 모두가
 
 /* ── 자원 테마(예산/정치자본): 「정치」 모드에서 라벨·단위·이모지만 교체 ── */
 function resTheme(){ return diffCfg().politics
-  ? { emoji:'🗳️', unit:'pt', name:'정치자본' }
-  : { emoji:'💰', unit:'억',  name:'예산' }; }
+  ? { emoji:'🗳️', unit:t('res_unit_pol'),    name:t('res_name_pol') }
+  : { emoji:'💰', unit:t('res_unit_budget'), name:t('res_name_budget') }; }
 
 /* ═══════════════ 시드 RNG(데일리 모드) ═══════════════
    기본은 Math.random. 데일리 모드면 날짜 시드로 결정론적 RNG로 교체. */
@@ -889,7 +889,7 @@ function renderCurrentScenario(){
     if(budgetMode){
       const cost = costs[idx];
       if(cost <= 0){
-        rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0 bg-emerald-400/15 text-emerald-300 border border-emerald-400/30">${theme.emoji} +${Math.abs(cost)}${theme.unit} 회복</span>`;
+        rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0 bg-emerald-400/15 text-emerald-300 border border-emerald-400/30">${theme.emoji} +${Math.abs(cost)}${theme.unit} ${t('sc_recover')}</span>`;
       } else {
         const afford = cost <= G.budget || idx === cheapest;
         rightBadge = `<span class="text-[10px] rounded-full px-1.5 py-0.5 font-bold shrink-0 ${afford?'bg-amber-400/15 text-amber-300 border border-amber-400/30':'bg-red-500/15 text-red-300 border border-red-500/30'}">${theme.emoji} ${cost}${theme.unit}</span>`;
@@ -899,8 +899,8 @@ function renderCurrentScenario(){
     }
 
     const headLeft = (hide || budgetMode)
-      ? `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">[선택 ${L}]${isSecret?' · 🔒 숨겨진 길':''}</div>`
-      : `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">[선택 ${L}] ${c.tag}</div>`;
+      ? `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">${t('sc_opt',{L:L})}${isSecret?t('sc_secret'):''}</div>`
+      : `<div class="font-bold ${isSecret?'text-amber-300':'text-emerald-400'} text-xs">${t('sc_opt',{L:L})} ${c.tag}</div>`;
     const head = `<div class="flex items-center justify-between gap-2 mb-0.5">${headLeft}${rightBadge}</div>`;
 
     const afford = !budgetMode || costs[idx] <= G.budget || idx === cheapest;
@@ -913,7 +913,7 @@ function renderCurrentScenario(){
     return `
       <button ${onclick} class="choice-btn ${cls}" style="opacity:0">
         ${head}
-        ${c.label}${afford?'':` <span class="text-[10px] text-red-300">· ${theme.name} 부족</span>`}
+        ${c.label}${afford?'':` <span class="text-[10px] text-red-300">· ${t('sc_short',{name:theme.name})}</span>`}
       </button>`;
   }).join('');
 
@@ -927,18 +927,18 @@ function renderCurrentScenario(){
       budgetBar = `
       <div class="mb-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-yellow-400/10 border border-amber-300/60 p-2.5 shadow-[0_0_18px_-6px_rgba(251,191,36,.9)]">
         <div class="flex justify-between items-center mb-1">
-          <span class="text-[11px] font-bold text-amber-200">${theme.emoji} 남은 ${theme.name}</span>
+          <span class="text-[11px] font-bold text-amber-200">${theme.emoji} ${t('sc_left',{name:theme.name})}</span>
           <span class="oc-chip text-[10px] rounded-full px-2 py-0.5 font-black bg-amber-300 text-slate-900">⚡ OVERCHARGE ${rawPct}%</span>
         </div>
         <div class="h-2 w-full rounded-full bg-black/30 overflow-hidden"><div class="h-full rounded-full bar-oc" style="width:100%"></div></div>
-        <div class="flex justify-between text-[10px] mt-1"><span class="text-amber-100 font-extrabold">${G.budget}${theme.unit}</span><span class="text-amber-300 font-bold">⚡ +${overAmt}${theme.unit} 초과 비축</span></div>
+        <div class="flex justify-between text-[10px] mt-1"><span class="text-amber-100 font-extrabold">${G.budget}${theme.unit}</span><span class="text-amber-300 font-bold">${t('sc_over',{v:overAmt,u:theme.unit})}</span></div>
       </div>`;
     } else {
       const low = rawPct <= 25;         // 부족: 붉은 경고(위험)
       budgetBar = `
       <div class="mb-3 rounded-xl bg-amber-500/10 border ${low?'border-red-400/40':'border-amber-500/25'} p-2.5">
         <div class="flex justify-between items-center text-[11px] font-bold text-amber-200 mb-1">
-          <span>${theme.emoji} 남은 ${theme.name}</span>
+          <span>${theme.emoji} ${t('sc_left',{name:theme.name})}</span>
           <span class="${low?'text-red-300':''}">${G.budget}${theme.unit} / ${G.budgetTotal}${theme.unit} <span class="opacity-70">(${rawPct}%)</span></span>
         </div>
         <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full ${low?'bg-gradient-to-r from-red-500 to-rose-600':'bg-gradient-to-r from-amber-400 to-orange-500'}" style="width:${clamp(rawPct,2,100)}%"></div></div>
@@ -953,23 +953,23 @@ function renderCurrentScenario(){
     const over = a > 100;
     const nextStep = (G.currentStep<3?3:G.currentStep<6?6:G.currentStep<9?9:null);
     const nextCut = nextStep!==null ? reviewCut(nextStep) : null;
-    const note = `<div class="text-[9px] text-sky-300/70 mt-1">강한 친환경 규제는 지지율↓ · 인기영합은 지지율↑${nextCut!==null?` · 다음 임기 심사: ${nextStep+1}단계 ${nextCut}% 미만 불신임`:''}</div>`;
+    const note = `<div class="text-[9px] text-sky-300/70 mt-1">${t('ap_note')}${nextCut!==null?t('ap_review',{s:nextStep+1,c:nextCut}):''}</div>`;
     if(over){
       approvalBar = `
       <div class="mb-3 rounded-xl bg-gradient-to-r from-fuchsia-500/15 to-violet-400/10 border border-fuchsia-300/60 p-2.5 shadow-[0_0_18px_-6px_rgba(216,180,254,.9)]">
         <div class="flex justify-between items-center mb-1">
-          <span class="text-[11px] font-bold text-fuchsia-100">📊 지지율(여론)</span>
+          <span class="text-[11px] font-bold text-fuchsia-100">${t('ap_label')}</span>
           <span class="oc-chip text-[10px] rounded-full px-2 py-0.5 font-black bg-fuchsia-300 text-slate-900">⚡ OVERCHARGE ${a}%</span>
         </div>
         <div class="h-2 w-full rounded-full bg-black/30 overflow-hidden"><div class="h-full rounded-full bar-oc oc-violet" style="width:100%"></div></div>
-        <div class="text-[10px] text-fuchsia-200 font-bold mt-1 text-right">⚡ +${a-100}%p 여론 버퍼 (임기 심사 대비)</div>
+        <div class="text-[10px] text-fuchsia-200 font-bold mt-1 text-right">${t('ap_buffer',{v:a-100})}</div>
         ${note}
       </div>`;
     } else {
       const col = a>=55 ? 'from-sky-400 to-emerald-400' : a>=35 ? 'from-amber-400 to-orange-500' : 'from-red-500 to-rose-600';
       approvalBar = `
       <div class="mb-3 rounded-xl bg-sky-500/10 border ${a<35?'border-red-400/40':'border-sky-500/25'} p-2.5">
-        <div class="flex justify-between items-center text-[11px] font-bold text-sky-200 mb-1"><span>📊 지지율(여론)</span><span class="${a<35?'text-red-300':''}">${a}%</span></div>
+        <div class="flex justify-between items-center text-[11px] font-bold text-sky-200 mb-1"><span>${t('ap_label')}</span><span class="${a<35?'text-red-300':''}">${a}%</span></div>
         <div class="h-1.5 w-full rounded-full bg-black/30 overflow-hidden"><div class="bar-fill h-full rounded-full bg-gradient-to-r ${col}" style="width:${clamp(a,2,100)}%"></div></div>
         ${note}
       </div>`;
@@ -980,9 +980,9 @@ function renderCurrentScenario(){
   let panicHTML = '';
   if(budgetMode && !G.panicUsed){
     const lbl = diffCfg().politics
-      ? '📢 우민화 정책 — 🌡️+0.25°C로 지지율 +15%'
-      : `🏦 지구 저당 금융 — 🌱-20%·🌡️+0.15°C로 예산 +${Math.round(G.budgetTotal*0.4)}억`;
-    panicHTML = `<button onclick="usePanic()" class="w-full mb-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-200 text-[11px] font-bold py-2.5 active:scale-95 transition hover:bg-red-500/20">⚠️ 비상대책(1회) · ${lbl}</button>`;
+      ? t('panic_pol')
+      : t('panic_bud',{v:Math.round(G.budgetTotal*0.4)});
+    panicHTML = `<button onclick="usePanic()" class="w-full mb-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-200 text-[11px] font-bold py-2.5 active:scale-95 transition hover:bg-red-500/20">${t('panic_btn',{lbl:lbl})}</button>`;
   }
 
   const ringHTML = (currentDiff==='B')
@@ -1000,10 +1000,10 @@ function renderCurrentScenario(){
       ${sceneArtHTML(scene)}
       <div class="flex items-center gap-1 mb-3">${seg}</div>
       <div class="flex justify-between text-xs text-slate-400 font-bold mb-2">
-        <span>📋 통제 단계: ${G.currentStep+1} / ${TOTAL_STAGES}</span>
-        <span class="text-red-400">위기 등급: TIER ${item.tier}</span>
+        <span>${t('sc_stage',{s:G.currentStep+1,t:TOTAL_STAGES})}</span>
+        <span class="text-red-400">${t('sc_tier',{n:item.tier})}</span>
       </div>
-      <div class="text-[9px] text-amber-300/60 mb-2">🌍 글로벌 자원 압박: 매 턴 기본으로 🌡️ 상승·🌱 감소가 누적됩니다 (후반 가속)</div>
+      <div class="text-[9px] text-amber-300/60 mb-2">${t('sc_gravity')}</div>
       <h2 class="text-lg font-black text-white mb-2">${scene.title}</h2>
       ${voiceHTML}
       <p id="sceneText" class="text-xs text-slate-300 leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5 mb-4 min-h-[3.5rem]"></p>
@@ -1024,10 +1024,10 @@ function renderCurrentScenario(){
 /* ── 선택 품질 판정: 점수(결정의 질)로 「좋은/나쁜 선택」을 한눈에 ──
    20=최선 / 10=절충 / 8=아쉬운 균형 / 그 외=값비싼 선택 */
 function choiceVerdict(score){
-  if(score>=20) return { icon:'🟢', label:'최선의 선택', sub:'지구를 최우선에 둔 모범적인 결단이었습니다.', col:'#34d399', cls:'border-emerald-400/50 bg-emerald-500/10' };
-  if(score>=10) return { icon:'🟡', label:'절충한 선택', sub:'얻은 만큼 내준, 무난한 타협이었습니다.',       col:'#fbbf24', cls:'border-amber-400/50 bg-amber-500/10' };
-  if(score>=8)  return { icon:'🟠', label:'아쉬운 균형', sub:'균형을 노렸지만 효과는 제한적이었습니다.',       col:'#fb923c', cls:'border-orange-400/50 bg-orange-500/10' };
-  return            { icon:'🔴', label:'값비싼 선택', sub:'당장은 쉬웠지만, 지구가 그 대가를 치릅니다.',     col:'#f87171', cls:'border-red-500/50 bg-red-500/10' };
+  if(score>=20) return { icon:'🟢', label:t('v_best'),   sub:t('v_best_sub'),   col:'#34d399', cls:'border-emerald-400/50 bg-emerald-500/10' };
+  if(score>=10) return { icon:'🟡', label:t('v_comp'),   sub:t('v_comp_sub'),   col:'#fbbf24', cls:'border-amber-400/50 bg-amber-500/10' };
+  if(score>=8)  return { icon:'🟠', label:t('v_shaky'),  sub:t('v_shaky_sub'),  col:'#fb923c', cls:'border-orange-400/50 bg-orange-500/10' };
+  return            { icon:'🔴', label:t('v_costly'), sub:t('v_costly_sub'), col:'#f87171', cls:'border-red-500/50 bg-red-500/10' };
 }
 
 function renderFeedbackPage(choice){
@@ -1040,7 +1040,7 @@ function renderFeedbackPage(choice){
     <div class="mb-4 rounded-xl border ${v.cls} p-3 flex items-center gap-3 text-left animate-pop">
       <div class="text-3xl leading-none shrink-0">${v.icon}</div>
       <div class="min-w-0 flex-1">
-        <div class="font-black text-sm" style="color:${v.col}">${v.label}<span class="ml-1.5 text-[11px] font-bold text-slate-300">· 지속가능성 +${choice.fx.score}점</span></div>
+        <div class="font-black text-sm" style="color:${v.col}">${v.label}<span class="ml-1.5 text-[11px] font-bold text-slate-300">${t('fb_sus',{n:choice.fx.score})}</span></div>
         <div class="text-[11px] text-slate-300 mt-0.5">${v.sub}</div>
       </div>
     </div>`;
@@ -1068,7 +1068,7 @@ function renderFeedbackPage(choice){
     ? `<div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-medium text-amber-200 text-left">${choice._echo}</div>` : '';
   stage.innerHTML = `
     <div class="glass-main p-6 rounded-2xl text-center shadow-xl animate-fade-in">
-      <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">정책 시행 결과</div>
+      <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">${t('fb_result')}</div>
       <h3 class="text-xl font-black text-white mb-4">"${choice.tag}"</h3>
       ${verdictHTML}
       ${deltaHTML}
@@ -1079,11 +1079,11 @@ function renderFeedbackPage(choice){
         🌐 SDG ${choice.fx.sdg}: ${meta.name} ↗
       </a>
       <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 text-left mb-6 text-slate-300 text-[11px] leading-relaxed">
-        <strong class="text-amber-400 block mb-0.5">💡 과학적 팩트 체크</strong>
+        <strong class="text-amber-400 block mb-0.5">${t('fb_fact')}</strong>
         ${choice.fact}
       </div>
       <button id="nextBtn" class="w-full rounded-full bg-white text-slate-950 font-black py-3 active:scale-95 transition shadow-lg text-sm">
-        다음 위기 보고서 접수 ➡️
+        ${t('fb_next')}
       </button>
     </div>`;
   document.getElementById('nextBtn').onclick = ()=>{
@@ -1255,7 +1255,7 @@ function renderEndingCard(result){
   // 📜 개인화 통치 크로니클
   const chron = buildChronicle();
   const chronicleHTML = `
-    <div class="text-[11px] font-bold text-amber-300 mb-1.5">📜 당신이 통치한 2050년의 기록</div>
+    <div class="text-[11px] font-bold text-amber-300 mb-1.5">${t('chron_title')}</div>
     <div class="space-y-1.5 mb-3">
       ${chron.map(t=>`<div class="text-[11px] leading-relaxed text-slate-200 bg-white/5 border border-white/5 rounded-lg p-2">${t}</div>`).join('')}
     </div>`;
@@ -1269,12 +1269,12 @@ function renderEndingCard(result){
         <div class="shrink-0 grid place-items-center rounded-md font-black text-white text-[9px]" style="width:30px;height:30px;background:${m.color}">${l.sdg}</div>
         <div class="min-w-0 flex-1">
           <div class="text-[11px] font-bold truncate text-slate-100">${l.choice}</div>
-          <div class="text-[9px] text-slate-400 truncate">${l.step+1}단계 · ${m.name}</div>
+          <div class="text-[9px] text-slate-400 truncate">${t('report_sub',{s:l.step+1,name:m.name})}</div>
         </div>
         <div class="shrink-0 text-sm">${mark}</div>
       </div>`;
   }).join('');
-  if(!report) report = '<div class="text-center text-[11px] text-slate-400 py-3">조기 종료로 기록이 부족합니다.</div>';
+  if(!report) report = '<div class="text-center text-[11px] text-slate-400 py-3">'+t('report_empty')+'</div>';
 
   const chip = (icon,label,val,col)=>`
     <div class="rounded-xl bg-white/5 border border-white/5 p-2.5 text-left">
@@ -1292,13 +1292,13 @@ function renderEndingCard(result){
 
         <div class="px-5 pt-5 pb-1 text-center shrink-0">
           <div class="font-tech text-[10px] tracking-[0.32em] text-slate-300">SURVIVE 2050 · FINAL REPORT</div>
-          <div class="mt-1 text-[10px] text-slate-400">난이도 ${d.emoji} ${d.label}</div>
+          <div class="mt-1 text-[10px] text-slate-400">${t('end_diff')} ${d.emoji} ${t('diff_label_'+d.key)}</div>
         </div>
 
         <div class="flex flex-col items-center px-5 pt-1 shrink-0">
           <div class="grid place-items-center rounded-full font-tech font-black"
                style="width:92px;height:92px;color:#05060e;background:${color};box-shadow:0 0 42px ${color}aa;font-size:46px;">${result.grade}</div>
-          <div class="mt-1.5 text-[11px] font-bold tracking-wider" style="color:${color}">최종 등급</div>
+          <div class="mt-1.5 text-[11px] font-bold tracking-wider" style="color:${color}">${t('end_grade')}</div>
           <h2 class="mt-1.5 text-lg font-black text-white text-center leading-tight px-2">${result.title}</h2>
         </div>
 
@@ -1307,27 +1307,27 @@ function renderEndingCard(result){
         </div>
 
         <div class="px-5 pt-3 grid grid-cols-2 gap-2 shrink-0">
-          ${chip('🌡️','평균 기온', '+'+s.temp.toFixed(2)+'°C', '#f87171')}
-          ${chip('🌊','글로벌 해수면', '+'+Math.round(s.sea)+'cm', '#22d3ee')}
-          ${chip('🌱','대자연 생태', Math.round(s.eco)+'%', '#34d399')}
-          ${chip('🏆','지속가능성', scorePct+'% · '+s.score+'점', '#fbbf24')}
+          ${chip('🌡️',t('chip_temp'), '+'+s.temp.toFixed(2)+'°C', '#f87171')}
+          ${chip('🌊',t('chip_sea'), '+'+Math.round(s.sea)+'cm', '#22d3ee')}
+          ${chip('🌱',t('chip_eco'), Math.round(s.eco)+'%', '#34d399')}
+          ${chip('🏆',t('chip_sus'), t('end_pts',{p:scorePct,s:s.score}), '#fbbf24')}
         </div>
-        ${(d.budget && G) ? `<div class="px-5 pt-2 shrink-0"><div class="rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5 text-center text-[11px] font-bold text-amber-200">${resTheme().emoji} 남은 ${resTheme().name} ${G.budget}${resTheme().unit} / ${G.budgetTotal}${resTheme().unit}</div></div>` : ''}
+        ${(d.budget && G) ? `<div class="px-5 pt-2 shrink-0"><div class="rounded-xl bg-amber-500/10 border border-amber-500/25 p-2.5 text-center text-[11px] font-bold text-amber-200">${resTheme().emoji} ${t('end_left',{name:resTheme().name,b:G.budget,u:resTheme().unit,tt:G.budgetTotal})}</div></div>` : ''}
 
         <div class="px-5 pt-3 pb-1 flex-1 min-h-0 flex flex-col">
           <div class="overflow-y-auto pr-1">
             ${chronicleHTML}
-            <div class="text-[11px] font-bold text-slate-300 mb-1.5">🎓 SDGs 엔딩 성적표</div>
+            <div class="text-[11px] font-bold text-slate-300 mb-1.5">${t('report_title')}</div>
             <div class="space-y-1.5">${report}</div>
           </div>
         </div>
 
         <div class="px-5 pb-5 pt-2 shrink-0">
-          <div class="text-center text-[10px] text-slate-400 mb-2">#순천대 #SDGs #지구통제실 #2050지구생존</div>
-          <button onclick="toggleReceipt(true)" class="w-full mb-2 rounded-full py-2.5 font-black text-xs bg-amber-50 text-slate-900 active:scale-95 transition shadow-lg">🧾 감성 영수증 보기 (스포티파이 랩드)</button>
+          <div class="text-center text-[10px] text-slate-400 mb-2">${t('hashtags')}</div>
+          <button onclick="toggleReceipt(true)" class="w-full mb-2 rounded-full py-2.5 font-black text-xs bg-amber-50 text-slate-900 active:scale-95 transition shadow-lg">${t('btn_receipt')}</button>
           <div class="grid grid-cols-2 gap-2">
-            <button onclick="shareResult()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">📸 스토리 카드 공유</button>
-            <button onclick="restartGame()" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">🔄 다시 도전</button>
+            <button onclick="shareResult()" class="rounded-full py-3 font-black text-xs text-slate-950 active:scale-95 transition shadow-lg" style="background:${color}">${t('btn_share')}</button>
+            <button onclick="restartGame()" class="rounded-full py-3 font-black text-xs glass-soft border border-white/10 text-slate-200 active:scale-95 transition">${t('btn_restart')}</button>
           </div>
         </div>
       </div>
