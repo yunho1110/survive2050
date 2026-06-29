@@ -83,5 +83,6 @@ window.TX_EN_chrome = {
   "최종 등급":"Final Grade", "지속가능성":"Sustainability", "난이도":"Difficulty",
   "고객님의 지구를 이용해 주셔서":"Thank you for using",
   "감사합니다 🌍":"your Earth 🌍",
-  "📸 영수증 저장":"📸 Save Receipt", "← 결과 카드":"← Back to Result"
+  "📸 영수증 저장":"📸 Save Receipt", "← 결과 카드":"← Back to Result",
+  "🚨 [돌발 속보]":"🚨 [BREAKING]"
 };

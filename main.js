@@ -260,7 +260,8 @@ function triggerRandomEvent(){
   const ev = pool[Math.floor(RNG()*pool.length)];
   let body;
   if(ev.apply){
-    const res = ev.apply(G);                       // 즉시 자원/지지율 충격(게이지는 직후 renderCurrentScenario에서 갱신)
+    let res = ev.apply(G);                          // 즉시 자원/지지율 충격(게이지는 직후 renderCurrentScenario에서 갱신)
+    if(window.LANG==='en') res = res.replace('예산','Budget').replace('지지율','Approval').replace(/억/g,'B');
     body = `${ev.flavor||''} <b>${res}</b>`;
   } else {
     G.modifier = ev;                               // 다음 선택 효과 증폭/완화
@@ -270,7 +271,7 @@ function triggerRandomEvent(){
   warn.className = ev.type === 'bad'
     ? 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-red-950/80 border border-red-700 text-red-300 animate-pulse'
     : 'block rounded-xl mb-3 text-center text-xs font-bold p-2.5 bg-emerald-950/80 border border-emerald-700 text-emerald-300';
-  warn.innerHTML = `🚨 [돌발 속보] ${ev.name}<br/><span class="font-normal text-[11px]">${body}</span>`;
+  warn.innerHTML = `${tx('🚨 [돌발 속보]')} ${ev.name}<br/><span class="font-normal text-[11px]">${body}</span>`;
 }
 
 /* ═══════════════ 3. 라이프타임 영구 업적(Achievement) ═══════════════ */
@@ -480,7 +481,8 @@ function choose(choiceIdx){
     const hit = RNG() < c.gamble.p;
     const g = hit ? c.gamble.win : c.gamble.lose;
     fx.temp += g.temp||0; fx.sea += g.sea||0; fx.eco += g.eco||0;
-    rolledNote = (hit?'🎲 성공 — ':'🎲 실패 — ') + (g.note||'');
+    rolledNote = (hit?t('gamble_win'):t('gamble_lose')) + (g.note||'');
+    c._rolledWin = hit;   // 언어 무관 성공 플래그(피드백 색상용)
     if(hit) G.gambleWins = (G.gambleWins||0) + 1;
   }
 
@@ -526,7 +528,7 @@ function choose(choiceIdx){
   G.history.push({
     step:G.currentStep, tier:item.tier, title:scene.title, choice:c.label, tag:c.tag,
     sdg:c.fx.sdg, baseScore:c.fx.score, feedback:c.feedback, fact:c.fact, flag:c.flag||null,
-    gambled: !!c.gamble, won: c.gamble ? rolledNote.includes('성공') : null,
+    gambled: !!c.gamble, won: c.gamble ? !!c._rolledWin : null,
   });
 
   // 🌍 글로벌 자원 압박: 선택 효과 위에 매 턴 기본 악화를 누적(가는 길을 험하게) → 이번 턴 net에 포함
@@ -546,7 +548,7 @@ function choose(choiceIdx){
   if(diffCfg().budget && !G.ocAnnounced){
     const res = diffCfg().politics ? (G.approval||60) : G.budget;
     const max = diffCfg().politics ? 100 : G.budgetTotal;
-    if(max>0 && res>max){ G.ocAnnounced = true; resToast('⚡ 오버차지 돌파! 상한을 넘겨 무제한 비축을 시작합니다', diffCfg().politics?'sky':'amber'); }
+    if(max>0 && res>max){ G.ocAnnounced = true; resToast(t('toast_oc'), diffCfg().politics?'sky':'amber'); }
   }
   if(Math.floor(old.eco/33) !== Math.floor(G.stats.eco/33)) updateSky();
 
@@ -590,7 +592,7 @@ function deferredToast(msg){
   const t = document.createElement('div');
   t.className = 'fixed left-1/2 -translate-x-1/2 z-[95] max-w-xs text-center glass-main rounded-xl px-4 py-2.5 text-[11px] font-bold text-red-200 border border-red-600/50 animate-pop shadow-2xl';
   t.style.top = 'calc(84px + var(--safe-top))';
-  t.innerHTML = '⏰ <b>과거의 청구서</b><br/><span class="font-normal text-red-300">'+msg+'</span>';
+  t.innerHTML = window.t('toast_bill')+'<br/><span class="font-normal text-red-300">'+msg+'</span>';
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 3600);
 }
@@ -625,13 +627,13 @@ function usePanic(){
   if(d.politics){
     G.stats.temp = G.stats.temp + 0.25;
     G.approval = clamp((typeof G.approval==='number'?G.approval:60) + 15, 0, 200);
-    resToast('📢 우민화 정책 — 🌡️+0.25°C 대가로 지지율 +15%', 'red');
+    resToast(t('toast_panic_pol'), 'red');
   } else {
     G.stats.eco  = clamp(G.stats.eco - 20, 0, 100);
     G.stats.temp = G.stats.temp + 0.15;
     const inject = Math.round(G.budgetTotal * 0.4);
     G.budget = G.budget + inject;
-    resToast(`🏦 지구 저당 금융 — 🌱-20%·🌡️+0.15°C 대가로 예산 +${inject}억`, 'red');
+    resToast(t('toast_panic_bud',{v:inject}), 'red');
   }
   const root = document.getElementById('app-root');
   if(root){ root.classList.add('earthquake','glitch-red'); setTimeout(()=>root.classList.remove('earthquake','glitch-red'), 500); }
@@ -650,29 +652,27 @@ function usePanic(){
 /* ═══════════════ 개인화 엔딩 크로니클: G.history로 통치 기록을 한 편의 서사로 ═══════════════ */
 function buildChronicle(){
   const h = (G && G.history) || [];
-  if(!h.length) return ['조기 종료로 통치 기록이 충분히 남지 않았습니다.'];
+  if(!h.length) return [t('chron_empty')];
   const has = f => h.some(x=>x.flag===f);
   const lines = [];
   const best = h.filter(x=>x.baseScore>=20).length;
   const worst= h.filter(x=>x.baseScore<=6).length;
-  if(has('coal_on')) lines.push('초반 재정 위기를 넘기려 <b>[석탄 발전소 재가동]</b>이라는 악마의 계약에 서명했습니다. 곳간은 채웠으나 하늘이 잿빛으로 물들었죠.');
+  if(has('coal_on')) lines.push(t('chron_coal'));
   const wonG  = h.find(x=>x.gambled && x.won===true);
   const lostG = h.find(x=>x.gambled && x.won===false);
-  if(wonG)  lines.push(`<b>[${wonG.choice}]</b> 도박은 운 좋게 맞아떨어져 위기를 모면했지만, 다음 도박까지 성공하리란 보장은 없었습니다.`);
-  if(lostG) lines.push(`<b>[${lostG.choice}]</b> 도박이 빗나가며 통제 불능의 연쇄 피해가 들이닥쳤습니다.`);
-  if(has('denial'))   lines.push('한때 <b>[해안의 위기를 외면]</b>한 대가로, 빙상 붕괴가 끝내 도시 한복판까지 밀려들었습니다.');
-  if(has('reckless')) lines.push('검증을 건너뛴 <b>[무모한 강행]</b>이 거듭되며 통제실의 신뢰에 금이 갔습니다.');
-  if(G && G.panicUsed) lines.push(diffCfg().politics
-    ? '벼랑 끝에서 <b>[우민화 정책]</b>으로 지구를 불태워 표를 사들이며 자리를 보전했습니다.'
-    : '파산 직전 <b>[지구 저당 금융]</b>으로 환경을 담보 잡혀 한 턴을 더 버텼습니다.');
-  if(has('great_transition')) lines.push('그리고 마지막 순간, 봉인되어 있던 <b>[대전환 선언]</b>에 서명하며 인류세의 폭주를 멈춰 세웠습니다.');
+  if(wonG)  lines.push(t('chron_wong',{c:wonG.choice}));
+  if(lostG) lines.push(t('chron_lostg',{c:lostG.choice}));
+  if(has('denial'))   lines.push(t('chron_denial'));
+  if(has('reckless')) lines.push(t('chron_reckless'));
+  if(G && G.panicUsed) lines.push(diffCfg().politics ? t('chron_panic_pol') : t('chron_panic_bud'));
+  if(has('great_transition')) lines.push(t('chron_great'));
   const last = h[h.length-1];
   if(last && last.baseScore>=20 && !has('great_transition'))
-    lines.push(`마지막 단계에서 <b>[${last.choice}]</b>에 전 재산을 쏟아부어, 지구를 극적인 생존의 궤도로 끌어올렸습니다.`);
+    lines.push(t('chron_last',{c:last.choice}));
   // 종합 한 줄
-  if(best>=worst+3)      lines.push(`총 ${best}번, 당신은 눈앞의 이익보다 지구를 먼저 택한 통치자였습니다.`);
-  else if(worst>=best+3) lines.push(`총 ${worst}번, 당신은 내일의 지구를 오늘의 곳간과 맞바꾼 통치자였습니다.`);
-  else                   lines.push('당신의 10번의 결단은 이상과 현실 사이를 끊임없이 저울질한 줄타기였습니다.');
+  if(best>=worst+3)      lines.push(t('chron_best',{n:best}));
+  else if(worst>=best+3) lines.push(t('chron_worst',{n:worst}));
+  else                   lines.push(t('chron_mixed'));
   return lines.slice(0, 6);
 }
 
@@ -695,22 +695,22 @@ function resourceTurnTick(){
     } else {
       regen = Math.round((ap/100) * 45);                            // 초중반은 빠듯하게
     }
-    if(regen>0){ G.budget = G.budget + regen; resToast(`🗳️ 정치자본 +${regen}pt 충원 (지지율 ${ap}%)`, 'sky'); }
+    if(regen>0){ G.budget = G.budget + regen; resToast(t('toast_regen',{v:regen,a:ap}), 'sky'); }
     const cut = reviewCut(G.currentStep);                     // 동적 커트라인
     if(cut!==null && ap < cut){
       const loss = Math.round(G.budget * 0.35);
       G.budget = Math.max(0, G.budget - loss);
-      resToast(`🗳️ ${G.currentStep+1}단계 임기 심사: 지지율 ${ap}% < ${cut}% 불신임 — 정치자본 -${loss}pt`, 'red');
+      resToast(t('toast_review',{s:G.currentStep+1,a:ap,c:cut,loss:loss}), 'red');
     }
   } else {
     const interest = Math.round(G.budget * 0.08);            // 남긴 예산 복리 이자(상한 없음 → 스노우볼)
-    if(interest>0){ G.budget = G.budget + interest; resToast(`💰 예산 이자 +${interest}억 (아낄수록 복리)`, 'amber'); }
+    if(interest>0){ G.budget = G.budget + interest; resToast(t('toast_interest',{v:interest}), 'amber'); }
     // 🌡️ 기후 재난 복구비: 기준선(1.5°C)을 「넘는 만큼」만 매 턴 보유 예산의 일부를 차압.
     //    → 지구를 시원하게(≤1.5°C) 지키면 복구비 0(이자를 온전히 누림). 방치해 더워질수록 가속 차압.
     //    저축 고인물 견제는 유지하되, 잘 막은 플레이어가 매 턴 「이유 없이」 뜯기는 느낌을 제거.
     const heatOver = Math.max(0, G.stats.temp - 1.5);
     const upkeep = Math.round(G.budget * heatOver * 0.07);
-    if(upkeep>0){ G.budget = Math.max(0, G.budget - upkeep); resToast(`🌡️ 기후 재난 복구비 -${upkeep}억 (기온 ${G.stats.temp.toFixed(1)}°C · 1.5°C 초과분)`, 'red'); }
+    if(upkeep>0){ G.budget = Math.max(0, G.budget - upkeep); resToast(t('toast_upkeep',{v:upkeep,t:G.stats.temp.toFixed(1)}), 'red'); }
     // 블랙스완: 총예산 초과로 과대 축적할수록 확률적 시장 쇼크로 비축분 증발(고인물 저축 방지)
     if(G.budgetTotal>0 && G.budget > G.budgetTotal){
       const over = G.budget / G.budgetTotal - 1;             // 100% 초과 비율
@@ -718,8 +718,8 @@ function resourceTurnTick(){
       if(RNG() < p){
         const evap = Math.round(G.budget * 0.28);
         G.budget = Math.max(0, G.budget - evap);
-        const kind = RNG()<0.5 ? '초인플레이션' : '녹색 거품 붕괴';
-        resToast(`💥 시장 쇼크: ${kind} — 비축 예산 -${evap}억 증발`, 'red');
+        const kind = RNG()<0.5 ? t('shock_infl') : t('shock_bubble');
+        resToast(t('toast_shock',{kind:kind,v:evap}), 'red');
       }
     }
   }
@@ -856,7 +856,7 @@ function startChoiceTimer(choices){
     if(remain<=0){
       let worst=0, lo=Infinity;
       choices.forEach((c,i)=>{ if(c.fx.score<lo){ lo=c.fx.score; worst=i; } });
-      miniToast('⏱️ 시간 초과 — 최악의 선택이 강제 집행됩니다');
+      miniToast(t('toast_timeout'));
       choose(worst); return;
     }
     G.choiceTimer = setTimeout(tick, 1000);
@@ -1063,7 +1063,7 @@ function renderFeedbackPage(choice){
     </div>`;
 
   const rolledHTML = choice._rolled
-    ? `<div class="mb-4 rounded-xl border ${choice._rolled.includes('성공')?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200':'border-red-500/40 bg-red-500/10 text-red-200'} p-2.5 text-xs font-bold">${choice._rolled}</div>` : '';
+    ? `<div class="mb-4 rounded-xl border ${choice._rolledWin?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200':'border-red-500/40 bg-red-500/10 text-red-200'} p-2.5 text-xs font-bold">${choice._rolled}</div>` : '';
   const echoHTML = choice._echo
     ? `<div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-medium text-amber-200 text-left">${choice._echo}</div>` : '';
   stage.innerHTML = `
@@ -1227,15 +1227,15 @@ async function buildReceiptBlob(result){
 async function shareReceipt(){
   const result = LAST_ENDING && LAST_ENDING.result; if(!result) return;
   const btn=document.querySelector('#receiptCard button[onclick="shareReceipt()"]'); const o=btn?btn.textContent:'';
-  if(btn){ btn.textContent='🧾 생성 중…'; btn.disabled=true; }
+  if(btn){ btn.textContent=t('receipt_making'); btn.disabled=true; }
   try{
     const blob=await buildReceiptBlob(result);
-    if(!blob){ miniToast('이미지 생성 실패 — 스크린샷으로 공유해 주세요 📸'); return; }
+    if(!blob){ miniToast(t('receipt_fail')); return; }
     const file=new File([blob],'survive2050_receipt.png',{type:'image/png'});
     if(navigator.canShare && navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file]}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
     const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='survive2050_receipt.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
-    miniToast('감성 영수증을 저장했어요! 🧾');
-  }catch(e){ miniToast('이미지 생성 실패 — 스크린샷으로 공유해 주세요 📸'); }
+    miniToast(t('receipt_saved'));
+  }catch(e){ miniToast(t('receipt_fail')); }
   finally{ if(btn){ btn.textContent=o; btn.disabled=false; } }
 }
 
@@ -1463,10 +1463,10 @@ async function shareResult(){
   if(!LAST_ENDING) return;
   const btn = document.querySelector('#shareCard button[onclick="shareResult()"]');
   const origin = btn ? btn.textContent : '';
-  if(btn){ btn.textContent='🖼️ 카드 생성 중…'; btn.disabled=true; }
+  if(btn){ btn.textContent=t('share_making'); btn.disabled=true; }
   try{
     const blob = await buildShareBlob();
-    if(!blob){ miniToast('이미지 생성에 실패했어요. 스크린샷으로 공유해 주세요 📸'); return; }
+    if(!blob){ miniToast(t('share_fail')); return; }
     const file = new File([blob], 'survive2050.png', { type:'image/png' });
 
     // 1순위: 파일 공유(모바일 → 인스타 스토리 등으로 바로 전송)
@@ -1478,9 +1478,9 @@ async function shareResult(){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='survive2050.png'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 1500);
-    miniToast('결과 카드 이미지를 저장했어요! 인스타 스토리에 올려보세요 📸');
+    miniToast(t('share_saved'));
   }catch(e){
-    miniToast('이미지 생성에 실패했어요. 스크린샷으로 공유해 주세요 📸');
+    miniToast(t('share_fail'));
   }finally{
     if(btn){ btn.textContent=origin; btn.disabled=false; }
   }

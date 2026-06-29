@@ -13,9 +13,9 @@
       if(u && SUPPORTED.indexOf(u)>=0){ localStorage.setItem('s2050_lang', u); return u; }
       var s = localStorage.getItem('s2050_lang');
       if(s && SUPPORTED.indexOf(s)>=0) return s;
-      // 현재 EN은 「프레임(인트로)만」 번역됨 → 외국 브라우저 자동전환은 보류(기본 ko).
-      // 시나리오·엔딩까지 번역 완료되면 아래를 navigator 기반 자동감지로 교체.
-      return 'ko';
+      // EN 100% 완성(본문·크롬 전부 번역) → 한국어 외 브라우저는 자동으로 영어로.
+      var n = (navigator.language||'ko').slice(0,2).toLowerCase();
+      return n==='ko' ? 'ko' : 'en';
     }catch(e){ return 'ko'; }
   }
   window.LANG = pick();
@@ -88,6 +88,35 @@ window.I18N = {
     chron_title:'📜 당신이 통치한 2050년의 기록', report_title:'🎓 SDGs 엔딩 성적표', report_empty:'조기 종료로 기록이 부족합니다.', report_sub:'{s}단계 · {name}',
     btn_receipt:'🧾 감성 영수증 보기 (스포티파이 랩드)', btn_share:'📸 스토리 카드 공유', btn_restart:'🔄 다시 도전',
     hashtags:'#순천대 #SDGs #지구통제실 #2050지구생존',
+    /* 크로니클 */
+    chron_empty:'조기 종료로 통치 기록이 충분히 남지 않았습니다.',
+    chron_coal:'초반 재정 위기를 넘기려 <b>[석탄 발전소 재가동]</b>이라는 악마의 계약에 서명했습니다. 곳간은 채웠으나 하늘이 잿빛으로 물들었죠.',
+    chron_wong:'<b>[{c}]</b> 도박은 운 좋게 맞아떨어져 위기를 모면했지만, 다음 도박까지 성공하리란 보장은 없었습니다.',
+    chron_lostg:'<b>[{c}]</b> 도박이 빗나가며 통제 불능의 연쇄 피해가 들이닥쳤습니다.',
+    chron_denial:'한때 <b>[해안의 위기를 외면]</b>한 대가로, 빙상 붕괴가 끝내 도시 한복판까지 밀려들었습니다.',
+    chron_reckless:'검증을 건너뛴 <b>[무모한 강행]</b>이 거듭되며 통제실의 신뢰에 금이 갔습니다.',
+    chron_panic_pol:'벼랑 끝에서 <b>[우민화 정책]</b>으로 지구를 불태워 표를 사들이며 자리를 보전했습니다.',
+    chron_panic_bud:'파산 직전 <b>[지구 저당 금융]</b>으로 환경을 담보 잡혀 한 턴을 더 버텼습니다.',
+    chron_great:'그리고 마지막 순간, 봉인되어 있던 <b>[대전환 선언]</b>에 서명하며 인류세의 폭주를 멈춰 세웠습니다.',
+    chron_last:'마지막 단계에서 <b>[{c}]</b>에 전 재산을 쏟아부어, 지구를 극적인 생존의 궤도로 끌어올렸습니다.',
+    chron_best:'총 {n}번, 당신은 눈앞의 이익보다 지구를 먼저 택한 통치자였습니다.',
+    chron_worst:'총 {n}번, 당신은 내일의 지구를 오늘의 곳간과 맞바꾼 통치자였습니다.',
+    chron_mixed:'당신의 10번의 결단은 이상과 현실 사이를 끊임없이 저울질한 줄타기였습니다.',
+    /* 토스트 */
+    toast_oc:'⚡ 오버차지 돌파! 상한을 넘겨 무제한 비축을 시작합니다',
+    toast_bill:'⏰ <b>과거의 청구서</b>',
+    toast_panic_pol:'📢 우민화 정책 — 🌡️+0.25°C 대가로 지지율 +15%',
+    toast_panic_bud:'🏦 지구 저당 금융 — 🌱-20%·🌡️+0.15°C 대가로 예산 +{v}억',
+    toast_regen:'🗳️ 정치자본 +{v}pt 충원 (지지율 {a}%)',
+    toast_review:'🗳️ {s}단계 임기 심사: 지지율 {a}% < {c}% 불신임 — 정치자본 -{loss}pt',
+    toast_interest:'💰 예산 이자 +{v}억 (아낄수록 복리)',
+    toast_upkeep:'🌡️ 기후 재난 복구비 -{v}억 (기온 {t}°C · 1.5°C 초과분)',
+    toast_shock:'💥 시장 쇼크: {kind} — 비축 예산 -{v}억 증발',
+    shock_infl:'초인플레이션', shock_bubble:'녹색 거품 붕괴',
+    toast_timeout:'⏱️ 시간 초과 — 최악의 선택이 강제 집행됩니다',
+    gamble_win:'🎲 성공 — ', gamble_lose:'🎲 실패 — ',
+    share_making:'🖼️ 카드 생성 중…', share_saved:'결과 카드 이미지를 저장했어요! 인스타 스토리에 올려보세요 📸', share_fail:'이미지 생성에 실패했어요. 스크린샷으로 공유해 주세요 📸',
+    receipt_making:'🧾 생성 중…', receipt_saved:'감성 영수증을 저장했어요! 🧾', receipt_fail:'이미지 생성 실패 — 스크린샷으로 공유해 주세요 📸',
   },
   en: {
     /* Sonnet 벌크 번역 → Opus 검수(용어집 일관성·HTML/이모지/플레이스홀더 보존) 통과 */
@@ -139,6 +168,33 @@ window.I18N = {
     "end_pts":"{p}% · {s} pts","end_left":"{name} left {b}{u} / {tt}{u}",
     "chron_title":"📜 Your Reign Over 2050","report_title":"🎓 SDGs Report Card","report_empty":"Ended early — records incomplete.","report_sub":"Stage {s} · {name}",
     "btn_receipt":"🧾 Wrapped Receipt","btn_share":"📸 Share Story Card","btn_restart":"🔄 Play Again",
-    "hashtags":"#SCNU #SDGs #EarthControlRoom #Survive2050"
+    "hashtags":"#SCNU #SDGs #EarthControlRoom #Survive2050",
+    "chron_empty":"Ended too early — not enough of a record to tell the tale.",
+    "chron_coal":"To weather the early budget crisis, you signed a devil's bargain: <b>[Restart the coal plants]</b>. The coffers filled, but the sky turned gray.",
+    "chron_wong":"<b>[{c}]</b> — that gamble paid off and dodged disaster, but there was no guarantee the next one would.",
+    "chron_lostg":"<b>[{c}]</b> — the gamble missed, and an uncontrollable chain of damage came crashing down.",
+    "chron_denial":"For once <b>[turning away from the coast's crisis]</b>, the ice-sheet collapse finally surged into the heart of the city.",
+    "chron_reckless":"Repeated <b>[reckless rollouts]</b> that skipped verification cracked the control room's credibility.",
+    "chron_panic_pol":"At the brink, you used <b>[Demagoguery]</b> — burning the planet to buy votes and cling to power.",
+    "chron_panic_bud":"On the edge of bankruptcy, you <b>[Mortgaged the Earth]</b>, pledging the environment as collateral to last one more turn.",
+    "chron_great":"And at the final moment, you signed the sealed <b>[Great Transition Declaration]</b>, halting the Anthropocene's runaway.",
+    "chron_last":"In the final stage you poured everything into <b>[{c}]</b>, dragging Earth onto a dramatic survival trajectory.",
+    "chron_best":"{n} times, you were a ruler who put the planet before immediate gain.",
+    "chron_worst":"{n} times, you were a ruler who traded tomorrow's Earth for today's coffers.",
+    "chron_mixed":"Your 10 decisions were a tightrope walk, forever weighing ideals against reality.",
+    "toast_oc":"⚡ Overcharge breakthrough! Past the cap — unlimited stockpiling begins",
+    "toast_bill":"⏰ <b>A Bill from the Past</b>",
+    "toast_panic_pol":"📢 Demagoguery — 🌡️+0.25°C in exchange for +15% Approval",
+    "toast_panic_bud":"🏦 Mortgage the Earth — 🌱-20%·🌡️+0.15°C in exchange for +{v}B Budget",
+    "toast_regen":"🗳️ Political Capital +{v}pt (Approval {a}%)",
+    "toast_review":"🗳️ Stage {s} Term Review: Approval {a}% < {c}% no-confidence — Political Capital -{loss}pt",
+    "toast_interest":"💰 Budget interest +{v}B (the more you save, the more it compounds)",
+    "toast_upkeep":"🌡️ Climate disaster upkeep -{v}B (Temp {t}°C · over 1.5°C)",
+    "toast_shock":"💥 Market shock: {kind} — {v}B in reserves evaporated",
+    "shock_infl":"hyperinflation", "shock_bubble":"green bubble burst",
+    "toast_timeout":"⏱️ Time's up — the worst option is forced through",
+    "gamble_win":"🎲 Success — ", "gamble_lose":"🎲 Failure — ",
+    "share_making":"🖼️ Generating card…", "share_saved":"Saved the result card! Post it to your IG story 📸", "share_fail":"Couldn't generate the image. Please share a screenshot 📸",
+    "receipt_making":"🧾 Generating…", "receipt_saved":"Saved your Wrapped receipt! 🧾", "receipt_fail":"Image generation failed — please share a screenshot 📸"
   }
 };
