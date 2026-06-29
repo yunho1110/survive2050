@@ -116,5 +116,16 @@ window.TX_EN_chrome = {
   "낮은 점수(C등급 컷오프 부근)로 간신히 도시 형태만 유지한 채 마무리하세요.":"Finish with a low score (around the C-grade cutoff), barely keeping the city intact.",
   "모든 상위 조건을 놓친 최저 점수로 마무리하면 도달하는 폴백 엔딩입니다.":"The fallback ending — reached by finishing with the lowest score, missing every higher condition.",
   "기온 상승을 통제하지 못하고 임계점(폭주 한계)까지 치솟게 만들면 도달합니다.":"Reached by losing control of the temperature rise and letting it spike to the runaway tipping point.",
-  "생태계 건강도를 0%까지 떨어뜨려 먹이사슬을 완전히 붕괴시키면 도달합니다.":"Reached by letting ecosystem health fall all the way to 0%, collapsing the food chain."
+  "생태계 건강도를 0%까지 떨어뜨려 먹이사슬을 완전히 붕괴시키면 도달합니다.":"Reached by letting ecosystem health fall all the way to 0%, collapsing the food chain.",
+
+  /* 신규 업적(v27) */
+  "🎭 미스터 밸런스":"🎭 Mr. Balance",
+  "10단계 전부에서 「균형형(8점)」 보기만 골라 중도의 길로 지구를 지켜냈습니다.":"Held the middle path the whole way — picking only the balanced (8-point) option in all 10 stages.",
+  "10단계 전부에서 네 번째 「균형형(8점)」 보기만 선택하세요.":"Pick only the fourth \"balanced (8-point)\" option in all 10 stages.",
+  "🎢 롤러코스터 통치":"🎢 Rollercoaster Rule",
+  "한 판에서 최선과 최악을 극단으로 오가며, 이상과 현실 사이를 미친 듯이 질주했습니다.":"Swung between the best and worst calls in a single run — careening wildly between ideals and reality.",
+  "한 판에서 「최선(20점)」 보기와 「최악(6점)」 보기를 각각 3번 이상 선택하세요.":"In a single run, pick both the best (20-point) and the worst (6-point) option at least 3 times each.",
+  "⛑️ 위기를 기회로":"⛑️ Crisis Into Opportunity",
+  "돌발 재난이 덮친 바로 그 턴에 최선의 결단을 내려, 위기를 정면으로 돌파했습니다.":"Made the best call on the very turn a sudden disaster struck — meeting the crisis head-on.",
+  "악재성 돌발 이벤트가 발생한 턴에 「최선(20점)」 보기를 선택하세요.":"Pick the best (20-point) option on a turn when a harmful sudden event is active."
 };

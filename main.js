@@ -283,6 +283,9 @@ const ACH_META = {
   COLD:  { name:'🥶 냉혈한 최고사령관',  desc:'생태 지표를 25% 미만으로 버려둔 채 문명만 보존했습니다.', hint:'생태계를 25% 미만으로 방치한 채 문명만 지켜 생존하세요.' },
   PURIST:{ name:'💚 완벽주의 통제관',    desc:'10단계 전부에서 「최선(20점)」 보기만 골라냈습니다.', hint:'10단계 전부에서 「최선(20점)」 보기만 선택하세요.' },
   GAMBLER:{ name:'🎲 운명의 도박사',     desc:'확률형 도박 보기를 3번 이상 성공시켰습니다.', hint:'한 판에서 확률형 도박 보기를 3번 이상 성공시키세요.' },
+  CENTRIST:{ name:'🎭 미스터 밸런스', desc:'10단계 전부에서 「균형형(8점)」 보기만 골라 중도의 길로 지구를 지켜냈습니다.', hint:'10단계 전부에서 네 번째 「균형형(8점)」 보기만 선택하세요.' },
+  CHAOS:   { name:'🎢 롤러코스터 통치', desc:'한 판에서 최선과 최악을 극단으로 오가며, 이상과 현실 사이를 미친 듯이 질주했습니다.', hint:'한 판에서 「최선(20점)」 보기와 「최악(6점)」 보기를 각각 3번 이상 선택하세요.' },
+  CRISIS:  { name:'⛑️ 위기를 기회로', desc:'돌발 재난이 덮친 바로 그 턴에 최선의 결단을 내려, 위기를 정면으로 돌파했습니다.', hint:'악재성 돌발 이벤트가 발생한 턴에 「최선(20점)」 보기를 선택하세요.' },
 };
 function getBadges(){ try{ return JSON.parse(localStorage.getItem('survive2050_achievements')||'[]'); }catch(e){ return []; } }
 function unlockBadge(id){
@@ -531,6 +534,9 @@ function choose(choiceIdx){
     gambled: !!c.gamble, won: c.gamble ? !!c._rolledWin : null,
   });
 
+  // ⛑️ 위기를 기회로: 악재성 돌발 이벤트가 활성인 턴에 최선(20점) 선택
+  if(G.modifier && G.modifier.type==='bad' && c.fx.score>=20) unlockBadge('CRISIS');
+
   // 🌍 글로벌 자원 압박: 선택 효과 위에 매 턴 기본 악화를 누적(가는 길을 험하게) → 이번 턴 net에 포함
   applyGravity();
 
@@ -743,6 +749,7 @@ function executeSuddenDeath(reasonType){
     title = '🪦 배드 엔딩: 끓어버린 지구';
     desc  = `평균 기온 상승이 마지노선인 +${diffCfg().suddenTemp.toFixed(1)}°C를 넘어서며 시베리아 영구동토층이 완전히 뒤집혔습니다. 기후 제어 능력을 상실한 지구는 방호복 없이 한 걸음도 걸을 수 없는 거대한 용광로가 되었습니다.`;
   }
+  evaluateCombos();
   renderEndingCard({ grade:'F', title, desc, color:'#ef4444', collapse:true });
 }
 
@@ -752,6 +759,11 @@ function evaluateCombos(){
   const allTop = h.length===TOTAL_STAGES && h.every(x=>x.baseScore>=20);
   if(allTop) unlockBadge('PURIST');                 // 전 단계 최선(20점)만
   if((G.gambleWins||0) >= 3) unlockBadge('GAMBLER'); // 도박 보기 3회 이상 성공
+
+  const best  = h.filter(x=>x.baseScore>=20).length;
+  const worst = h.filter(x=>x.baseScore<=6).length;
+  if(h.length===TOTAL_STAGES && h.every(x=>x.baseScore===8)) unlockBadge('CENTRIST');
+  if(best>=3 && worst>=3) unlockBadge('CHAOS');
 }
 
 /* 데이터 기반 엔딩(ENDING_RULES) 테이블만 순회 — 분기 로직 0.
