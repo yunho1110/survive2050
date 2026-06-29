@@ -1716,7 +1716,14 @@ function localizeData(){
     if(c.gamble){ ['win','lose'].forEach(g=>{ if(c.gamble[g] && c.gamble[g].note && M[c.gamble[g].note]) c.gamble[g].note = M[c.gamble[g].note]; }); } }
   try{
     ['early','mid','late','final'].forEach(g=>(SCENARIOS[g]||[]).forEach(sc=>{ ['title','text','voice'].forEach(sw(sc)); (sc.choices||[]).forEach(tc); }));
-    Object.values(EXTRA_CHOICES||{}).forEach(tc);
+    // EXTRA_CHOICES(진짜 4번째 보기): 값(라벨·피드백 등) 치환 + 키(시나리오 제목)를 영어 제목으로 재매핑.
+    // buildQueue가 영어로 치환된 scene.title로 조회하므로, 키도 함께 영어화해야 EN에서도 4번째 보기가 붙는다.
+    const exSrc = window.EXTRA_CHOICES || (typeof EXTRA_CHOICES!=='undefined' ? EXTRA_CHOICES : null);
+    if(exSrc){
+      const exOut = {};
+      Object.keys(exSrc).forEach(k=>{ const c = exSrc[k]; tc(c); exOut[M[k] || k] = c; });
+      window.EXTRA_CHOICES = exOut;
+    }
     (window.ECHOES||[]).forEach(e=>{ if(e.text && M[e.text]) e.text = M[e.text]; });
     Object.values(ENDING_DEX||{}).forEach(d=>{ if(d.name && M[d.name]) d.name = M[d.name]; });
     Object.keys(SDG||{}).forEach(k=>{ if(SDG[k].name && M[SDG[k].name]) SDG[k].name = M[SDG[k].name]; });
