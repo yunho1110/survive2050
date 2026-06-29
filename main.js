@@ -276,13 +276,13 @@ function triggerRandomEvent(){
 
 /* ═══════════════ 3. 라이프타임 영구 업적(Achievement) ═══════════════ */
 const ACH_META = {
-  PARIS: { name:'🕊️ 파리 협정의 전설', desc:'평균 기온 상승을 +1.5°C 이하로 완벽히 방어했습니다.' },
-  BOIL:  { name:'🌋 끓어버린 지구',     desc:'기온 폭주로 인류가 강제 조기 종료되었습니다.' },
-  EMPTY: { name:'🍂 침묵의 봄',         desc:'생태계 건강도 0% 도달로 먹이사슬이 전멸했습니다.' },
-  CYBER: { name:'🤖 프랑켄슈타인 테크',  desc:'위험한 지구공학 카드를 남발하여 생존했습니다.' },
-  COLD:  { name:'🥶 냉혈한 최고사령관',  desc:'생태 지표를 25% 미만으로 버려둔 채 문명만 보존했습니다.' },
-  PURIST:{ name:'💚 완벽주의 통제관',    desc:'10단계 전부에서 「최선(20점)」 보기만 골라냈습니다.' },
-  GAMBLER:{ name:'🎲 운명의 도박사',     desc:'확률형 도박 보기를 3번 이상 성공시켰습니다.' },
+  PARIS: { name:'🕊️ 파리 협정의 전설', desc:'평균 기온 상승을 +1.5°C 이하로 완벽히 방어했습니다.', hint:'게임 종료 시 평균 기온 상승을 +1.5°C 이하로 막아내세요.' },
+  BOIL:  { name:'🌋 끓어버린 지구',     desc:'기온 폭주로 인류가 강제 조기 종료되었습니다.', hint:'기온이 폭주해 게임이 강제 종료되는 파멸 엔딩에 도달하세요.' },
+  EMPTY: { name:'🍂 침묵의 봄',         desc:'생태계 건강도 0% 도달로 먹이사슬이 전멸했습니다.', hint:'생태계 건강도를 0%까지 떨어뜨려 먹이사슬을 붕괴시키세요.' },
+  CYBER: { name:'🤖 프랑켄슈타인 테크',  desc:'위험한 지구공학 카드를 남발하여 생존했습니다.', hint:'위험한 지구공학(성층권 살포 등) 보기에 의존해 끝까지 생존하세요.' },
+  COLD:  { name:'🥶 냉혈한 최고사령관',  desc:'생태 지표를 25% 미만으로 버려둔 채 문명만 보존했습니다.', hint:'생태계를 25% 미만으로 방치한 채 문명만 지켜 생존하세요.' },
+  PURIST:{ name:'💚 완벽주의 통제관',    desc:'10단계 전부에서 「최선(20점)」 보기만 골라냈습니다.', hint:'10단계 전부에서 「최선(20점)」 보기만 선택하세요.' },
+  GAMBLER:{ name:'🎲 운명의 도박사',     desc:'확률형 도박 보기를 3번 이상 성공시켰습니다.', hint:'한 판에서 확률형 도박 보기를 3번 이상 성공시키세요.' },
 };
 function getBadges(){ try{ return JSON.parse(localStorage.getItem('survive2050_achievements')||'[]'); }catch(e){ return []; } }
 function unlockBadge(id){
@@ -1486,6 +1486,71 @@ async function shareResult(){
   }
 }
 
+/* ═══════════════ 8.5. 업적/엔딩 상세 팝업(진열장 타일 탭 시) ═══════════════ */
+function _detailModalEsc(ev){ if(ev.key==='Escape') closeDetailModal(); }
+function openDetailModal(kind, id){
+  closeDetailModal();   // 중복 오버레이 방지
+
+  let kindLabel, unlocked, icon, name, flavor, donePill;
+  if(kind==='ach'){
+    const meta = ACH_META[id]; if(!meta) return;
+    kindLabel = t('detail_ach_kind');
+    unlocked  = getBadges().includes(id);
+    icon      = meta.name.split(' ')[0];
+    name      = unlocked ? meta.name.split(' ').slice(1).join(' ') : t('detail_locked_name');
+    flavor    = unlocked ? meta.desc : null;
+    donePill  = unlocked ? t('detail_ach_done') : t('detail_locked_tag');
+    var hint  = meta.hint;
+  } else {
+    const meta = ENDING_DEX[id]; if(!meta) return;
+    kindLabel = t('detail_end_kind');
+    unlocked  = getEndingDex().includes(id);
+    icon      = unlocked ? meta.emoji : '❔';
+    name      = unlocked ? meta.name : t('detail_locked_name');
+    flavor    = unlocked ? meta.desc : null;
+    donePill  = unlocked ? t('detail_end_done') : t('detail_locked_tag');
+    var hint  = meta.hint;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'detailModal';
+  overlay.className = 'fixed inset-0 z-[130] flex items-center justify-center p-5 animate-fade-in';
+  overlay.style.cssText = 'background:rgba(2,6,14,.62); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);';
+  overlay.onclick = closeDetailModal;
+
+  const pillCls = unlocked
+    ? 'inline-block rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold px-3 py-1 mt-3'
+    : 'inline-block rounded-full bg-white/5 border border-white/15 text-slate-400 text-[11px] font-bold px-3 py-1 mt-3';
+
+  const flavorHTML = flavor
+    ? `<p class="text-[12px] text-slate-300 leading-relaxed mt-3">${flavor}</p>`
+    : `<div class="rounded-xl bg-black/25 border border-white/10 p-3 mt-3 text-left">
+         <div class="text-[11px] font-bold text-amber-300 mb-1">${t('detail_unlock')}</div>
+         <p class="text-[11px] text-slate-300 leading-relaxed">${hint||''}</p>
+       </div>`;
+
+  overlay.innerHTML = `
+    <div class="glass-main rounded-2xl p-5 w-full max-w-sm text-center animate-pop ring-1 ring-emerald-400/30 shadow-[0_0_40px_-10px_rgba(16,185,129,0.45)]" onclick="event.stopPropagation()">
+      <div class="text-[11px] font-bold text-emerald-300/80 tracking-wide">${kindLabel}</div>
+      <div class="text-5xl mt-2 ${unlocked?'':'opacity-50'}">${icon}${unlocked?'':' 🔒'}</div>
+      <div class="font-black text-base mt-2 ${unlocked?'text-white':'text-slate-400'}">${name}</div>
+      ${flavorHTML}
+      <div class="${pillCls}">${donePill}</div>
+      <button onclick="closeDetailModal()" class="w-full rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 font-bold py-3.5 text-sm active:scale-95 transition mt-5">
+        ${t('detail_close')}
+      </button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', _detailModalEsc);
+  if(soundEnabled) playChordSynth([523.25,659.25],'sine',0.25,0.04);
+}
+function closeDetailModal(){
+  const ov = document.getElementById('detailModal');
+  if(ov) ov.remove();
+  document.removeEventListener('keydown', _detailModalEsc);
+}
+
 /* ═══════════════ 9. 시네마틱 인트로 + 난이도 + 업적 진열장 ═══════════════ */
 function screenIntro(){
   const stage = document.getElementById('stage');
@@ -1499,8 +1564,8 @@ function screenIntro(){
     const ok = earned.includes(key);
     const ic = ACH_META[key].name.split(' ')[0];
     const nm = ACH_META[key].name.split(' ').slice(1).join(' ');
-    return `<div class="p-2 rounded-lg text-center ${ok?'bg-amber-500/10 border border-amber-500/30 text-amber-300':'bg-white/5 opacity-30 text-slate-500'} text-[10px]">
-        <div class="text-base mb-0.5">${ic}</div><div class="font-bold truncate">${nm}</div></div>`;
+    return `<div onclick="openDetailModal('ach','${key}')" class="cursor-pointer active:scale-95 transition p-2 rounded-lg text-center ${ok?'bg-amber-500/10 border border-amber-500/30 text-amber-300':'bg-white/5 opacity-30 text-slate-500'} text-[10px]">
+        <div class="text-base mb-0.5">${ic}</div><div class="font-bold leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${nm}</div></div>`;
   }).join('');
 
   // 난이도 선택 칩
@@ -1522,9 +1587,9 @@ function screenIntro(){
   const seenEnd = getEndingDex();
   const dexHTML = Object.keys(ENDING_DEX).map(id=>{
     const ok = seenEnd.includes(id), m = ENDING_DEX[id];
-    return `<div class="p-1.5 rounded-lg text-center ${ok?'bg-emerald-500/10 border border-emerald-500/30 text-emerald-200':'bg-white/5 opacity-40 text-slate-500'} text-[9px]">
+    return `<div onclick="openDetailModal('end','${id}')" class="cursor-pointer active:scale-95 transition p-1.5 rounded-lg text-center ${ok?'bg-emerald-500/10 border border-emerald-500/30 text-emerald-200':'bg-white/5 opacity-40 text-slate-500'} text-[9px]">
         <div class="text-sm leading-none">${ok?m.emoji:'❔'}</div>
-        <div class="font-bold truncate mt-0.5">${ok?m.name:'???'}</div></div>`;
+        <div class="font-bold leading-tight mt-0.5" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${ok?m.name:'???'}</div></div>`;
   }).join('');
 
   // 시네마틱 인트로 잔불(재) 입자
@@ -1725,11 +1790,11 @@ function localizeData(){
       window.EXTRA_CHOICES = exOut;
     }
     (window.ECHOES||[]).forEach(e=>{ if(e.text && M[e.text]) e.text = M[e.text]; });
-    Object.values(ENDING_DEX||{}).forEach(d=>{ if(d.name && M[d.name]) d.name = M[d.name]; });
+    Object.values(ENDING_DEX||{}).forEach(d=>{ ['name','desc','hint'].forEach(sw(d)); });
     Object.keys(SDG||{}).forEach(k=>{ if(SDG[k].name && M[SDG[k].name]) SDG[k].name = M[SDG[k].name]; });
     // 인게임 크롬(객체형): 돌발이벤트·업적 텍스트를 제자리 치환
     (typeof EVENTS!=='undefined'?EVENTS:[]).forEach(e=>{ ['name','desc','flavor'].forEach(sw(e)); });
-    if(typeof ACH_META!=='undefined') Object.values(ACH_META).forEach(a=>{ ['name','desc'].forEach(sw(a)); });
+    if(typeof ACH_META!=='undefined') Object.values(ACH_META).forEach(a=>{ ['name','desc','hint'].forEach(sw(a)); });
   }catch(e){}
 }
 
